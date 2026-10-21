@@ -10,29 +10,31 @@ type SocialityLogoProps = {
 
 export default function SocialityLogo({
   href = '/feed',
-  width = 72,
-  height = 21,
+  width = 116,
+  height = 24,
   className = '',
 }: SocialityLogoProps) {
+  const iconSize = Math.min(height, 28);
+  const textSize = Math.max(13, Math.min(19, width / 7.5));
+
   return (
     <Link
       href={href}
       aria-label='Sociality home'
-      className={`inline-flex shrink-0 items-center gap-1.5 ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-[7px] font-sans text-white transition-opacity hover:opacity-85 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#7F51F9] ${className}`}
     >
       <Image
         src='/assets/figma/icons/sociality_logo.png'
         alt=''
-        width={height}
-        height={height}
+        width={iconSize}
+        height={iconSize}
         priority
-        unoptimized
         className='shrink-0 object-contain'
       />
 
       <span
-        className='font-semibold tracking-tight text-white'
-        style={{ fontSize: `${Math.max(11, width / 6.5)}px` }}
+        className='whitespace-nowrap font-semibold tracking-[-0.035em]'
+        style={{ fontSize: textSize }}
       >
         Sociality
       </span>

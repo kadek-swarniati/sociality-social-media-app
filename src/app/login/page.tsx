@@ -42,13 +42,24 @@ export default function LoginPage() {
       email: '',
       password: '',
     },
+    mode: 'onSubmit',
   });
 
   const mutation = useMutation({
     mutationFn: loginUser,
     onSuccess: (response) => {
       login(response.data.token, response.data.user);
-      router.replace('/feed');
+
+      const requestedPath = searchParams.get('returnTo');
+      const safePath =
+        requestedPath?.startsWith('/') &&
+        !requestedPath.startsWith('//') &&
+        !requestedPath.startsWith('/\\')
+          ? requestedPath
+          : '/feed';
+
+      router.replace(safePath);
+      router.refresh();
     },
     onError: (error) => {
       setServerError(getApiErrorMessage(error));
@@ -61,47 +72,64 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell
-      title='Welcome back'
-      description='Sign in to Sociality and reconnect with your community.'
-    >
+    <AuthShell title='Welcome Back!'>
       {searchParams.get('registered') === '1' && (
         <div
           role='status'
-          className='mb-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300'
+          className='mb-4 rounded-lg border border-[#079455]/30 bg-[#079455]/10 px-3 py-2.5 font-sans text-xs leading-5 text-emerald-300'
         >
-          Account created successfully. Please sign in.
+          Account created successfully. Please log in.
         </div>
       )}
 
       {serverError && (
         <div
           role='alert'
-          className='mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300'
+          className='mb-4 rounded-lg border border-[#D9206E]/40 bg-[#D9206E]/10 px-3 py-2.5 font-sans text-xs leading-5 text-rose-300'
         >
           {serverError}
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className='space-y-6'>
-        <div className='space-y-2'>
-          <Label htmlFor='email'>Email address</Label>
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        className='space-y-5 font-sans'
+      >
+        <div className='space-y-1.5'>
+          <Label htmlFor='email' className='text-[12px] font-medium text-white'>
+            Email
+          </Label>
+
           <Input
             id='email'
             type='email'
-            placeholder='you@example.com'
+            placeholder='johndoe@email.com'
             autoComplete='email'
             aria-invalid={!!errors.email}
-            className='h-12 border-white/15 bg-white/5'
+            aria-describedby={errors.email ? 'login-email-error' : undefined}
+            className='h-10 rounded-[8px] border-white/[0.08] bg-[#0A0D12] px-3 font-sans text-[12px] text-white placeholder:text-[#717680] focus-visible:border-[#7F51F9] focus-visible:ring-[#7F51F9]/30'
             {...register('email')}
           />
+
           {errors.email && (
-            <p className='text-xs text-red-400'>{errors.email.message}</p>
+            <p
+              id='login-email-error'
+              role='alert'
+              className='text-xs text-rose-400'
+            >
+              {errors.email.message}
+            </p>
           )}
         </div>
 
-        <div className='space-y-2'>
-          <Label htmlFor='password'>Password</Label>
+        <div className='space-y-1.5'>
+          <Label
+            htmlFor='password'
+            className='text-[12px] font-medium text-white'
+          >
+            Password
+          </Label>
 
           <div className='relative'>
             <Input
@@ -110,7 +138,10 @@ export default function LoginPage() {
               placeholder='Enter your password'
               autoComplete='current-password'
               aria-invalid={!!errors.password}
-              className='h-12 border-white/15 bg-white/5 pr-12'
+              aria-describedby={
+                errors.password ? 'login-password-error' : undefined
+              }
+              className='h-10 rounded-[8px] border-white/[0.08] bg-[#0A0D12] px-3 pr-11 font-sans text-[12px] text-white placeholder:text-[#717680] focus-visible:border-[#7F51F9] focus-visible:ring-[#7F51F9]/30'
               {...register('password')}
             />
 
@@ -118,39 +149,46 @@ export default function LoginPage() {
               type='button'
               onClick={() => setShowPassword((value) => !value)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className='absolute top-1/2 right-4 -translate-y-1/2 text-zinc-400 hover:text-white'
+              aria-pressed={showPassword}
+              className='absolute top-1/2 right-3 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-[#A4A7AE] transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#7F51F9]'
             >
-              {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
 
           {errors.password && (
-            <p className='text-xs text-red-400'>{errors.password.message}</p>
+            <p
+              id='login-password-error'
+              role='alert'
+              className='text-xs text-rose-400'
+            >
+              {errors.password.message}
+            </p>
           )}
         </div>
 
         <Button
           type='submit'
           disabled={mutation.isPending}
-          className='h-12 w-full rounded-xl bg-[#6D28D9] font-semibold text-white hover:bg-[#7C3AED]'
+          className='mt-1 h-10 w-full rounded-full bg-[#6936F2] font-sans text-[12px] font-semibold text-white transition-colors hover:bg-[#7F51F9] focus-visible:ring-[#7F51F9] disabled:opacity-60'
         >
           {mutation.isPending ? (
             <>
-              <LoaderCircle className='mr-2 size-4 animate-spin' />
-              Signing in...
+              <LoaderCircle className='size-4 animate-spin' />
+              Logging in...
             </>
           ) : (
-            'Sign In'
+            'Login'
           )}
         </Button>
 
-        <p className='text-center text-sm text-zinc-400'>
+        <p className='text-center font-sans text-[12px] leading-5 text-[#D5D7DA]'>
           Don&apos;t have an account?{' '}
           <Link
             href='/register'
-            className='font-semibold text-purple-400 hover:text-purple-300'
+            className='font-semibold text-[#A989FF] transition-colors hover:text-white focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-[#7F51F9]'
           >
-            Create an account
+            Register
           </Link>
         </p>
       </form>
