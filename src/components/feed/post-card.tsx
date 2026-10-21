@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { Heart, MessageCircle, Bookmark } from 'lucide-react';
+import { Bookmark, Heart, MessageCircle } from 'lucide-react';
 
 dayjs.extend(relativeTime);
 
@@ -27,22 +27,23 @@ type PostCardProps = {
 };
 
 export default function PostCard({ post }: PostCardProps) {
-  const initial = post.author.name.charAt(0).toUpperCase();
+  const initial = post.author.name.charAt(0).toUpperCase() || '?';
+  const validDate = dayjs(post.createdAt).isValid();
 
   return (
-    <article className='overflow-hidden rounded-2xl border border-white/10 bg-[#15131B]'>
-      <div className='flex items-center gap-3 p-4'>
+    <article className='overflow-hidden rounded-xl border border-white/[0.08] bg-[#0A0D12] font-sans'>
+      <header className='flex items-center gap-3 px-4 py-3.5'>
         <Link
           href={`/users/${encodeURIComponent(post.author.username)}`}
-          className='flex min-w-0 items-center gap-3'
+          className='group flex min-w-0 flex-1 items-center gap-3'
         >
-          <div className='relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-purple-800 text-sm font-semibold text-white'>
+          <div className='relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#6936F2] text-sm font-semibold text-white'>
             {post.author.avatarUrl ? (
               <Image
                 src={post.author.avatarUrl}
                 alt={`${post.author.name}'s avatar`}
                 fill
-                sizes='44px'
+                sizes='40px'
                 unoptimized
                 className='object-cover'
               />
@@ -52,71 +53,91 @@ export default function PostCard({ post }: PostCardProps) {
           </div>
 
           <div className='min-w-0'>
-            <p className='truncate font-semibold text-white'>
+            <p className='truncate text-[13px] leading-5 font-semibold text-white group-hover:text-[#B9A1FF]'>
               {post.author.name}
             </p>
-            <p className='truncate text-xs text-zinc-400'>
+
+            <p className='truncate text-[11px] leading-4 text-[#A4A7AE]'>
               @{post.author.username}
             </p>
           </div>
         </Link>
 
-        <time
-          dateTime={post.createdAt}
-          className='ml-auto shrink-0 text-xs text-zinc-500'
-        >
-          {dayjs(post.createdAt).isValid()
-            ? dayjs(post.createdAt).fromNow()
-            : ''}
-        </time>
-      </div>
+        {validDate && (
+          <time
+            dateTime={post.createdAt}
+            title={dayjs(post.createdAt).format('DD MMM YYYY, HH:mm')}
+            className='shrink-0 text-[11px] text-[#717680]'
+          >
+            {dayjs(post.createdAt).fromNow()}
+          </time>
+        )}
+      </header>
 
       {post.imageUrl && (
-        <div className='relative aspect-[4/3] w-full bg-black/30'>
+        <Link
+          href={`/posts/${post.id}`}
+          aria-label={`View post by ${post.author.name}`}
+          className='relative block aspect-[4/3] w-full overflow-hidden bg-[#181D27]'
+        >
           <Image
             src={post.imageUrl}
-            alt={post.caption || 'Sociality post image'}
+            alt={post.caption || `Post by ${post.author.name}`}
             fill
-            sizes='(max-width: 768px) 100vw, 640px'
+            sizes='(max-width: 640px) 100vw, 600px'
             unoptimized
-            className='object-cover'
+            className='object-cover transition-transform duration-300 hover:scale-[1.015]'
           />
-        </div>
+        </Link>
       )}
 
-      <div className='space-y-4 p-4'>
-        <div className='flex items-center gap-5 text-zinc-400'>
+      <div className='space-y-3 px-4 py-3.5'>
+        <div className='flex items-center gap-5 text-[#A4A7AE]'>
           <div
-            className='flex items-center gap-2'
             aria-label={`${post.likesCount} likes`}
+            title='Like action will be enabled with the API integration'
+            className='flex items-center gap-1.5'
           >
-            <Heart className='size-5' />
-            <span className='text-sm'>{post.likesCount}</span>
+            <Heart className='size-[19px]' aria-hidden='true' />
+            <span className='text-[12px]'>{post.likesCount}</span>
           </div>
 
           <Link
             href={`/posts/${post.id}`}
-            className='flex items-center gap-2 hover:text-purple-300'
             aria-label={`View ${post.commentsCount} comments`}
+            className='flex items-center gap-1.5 transition-colors hover:text-[#B9A1FF]'
           >
-            <MessageCircle className='size-5' />
-            <span className='text-sm'>{post.commentsCount}</span>
+            <MessageCircle className='size-[19px]' />
+            <span className='text-[12px]'>{post.commentsCount}</span>
           </Link>
 
-          <Bookmark
-            className='ml-auto size-5'
-            aria-label='Save feature coming next'
-          />
+          <div
+            aria-label='Save action is not yet available'
+            title='Save action will be enabled with the API integration'
+            className='ml-auto'
+          >
+            <Bookmark className='size-[19px]' aria-hidden='true' />
+          </div>
         </div>
 
         {post.caption && (
-          <p className='whitespace-pre-wrap break-words text-sm leading-6 text-zinc-200'>
-            <span className='mr-2 font-semibold text-white'>
-              {post.author.name}
-            </span>
+          <p className='whitespace-pre-wrap break-words text-[13px] leading-[21px] text-[#D5D7DA]'>
+            <Link
+              href={`/users/${encodeURIComponent(post.author.username)}`}
+              className='mr-2 font-semibold text-white hover:text-[#B9A1FF]'
+            >
+              {post.author.username}
+            </Link>
             {post.caption}
           </p>
         )}
+
+        <Link
+          href={`/posts/${post.id}`}
+          className='inline-block text-[11px] text-[#717680] transition-colors hover:text-[#B9A1FF]'
+        >
+          View post
+        </Link>
       </div>
     </article>
   );

@@ -30,6 +30,22 @@ function getNumber(object: JsonObject, keys: string[]): number {
   return 0;
 }
 
+function getNumericValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (
+    typeof value === 'string' &&
+    value.trim() !== '' &&
+    Number.isFinite(Number(value))
+  ) {
+    return Number(value);
+  }
+
+  return null;
+}
+
 function getPost(value: unknown): FeedPost {
   if (!isObject(value)) {
     throw new Error('Feed contains an invalid post.');
@@ -41,12 +57,18 @@ function getPost(value: unknown): FeedPost {
     throw new Error('Feed post has no recognizable author object.');
   }
 
-  const id = value.id;
+  const id = getNumericValue(value.id);
   const name = getString(author, ['name']);
   const username = getString(author, ['username']);
   const createdAt = getString(value, ['createdAt', 'created_at']);
 
-  if (typeof id !== 'number' || !name || !username || !createdAt) {
+  if (
+    id === null ||
+    !Number.isInteger(id) ||
+    !name ||
+    !username ||
+    !createdAt
+  ) {
     throw new Error('Feed post fields differ from the expected API structure.');
   }
 
@@ -98,7 +120,7 @@ export function parseFeedResponse(response: unknown): ParsedFeed {
 
   if (!Array.isArray(items)) {
     throw new Error(
-      'Feed response format is not recognized. Please verify the GET /api/feed response.'
+      'Feed response format is not recognized. Verify the GET /feed response.'
     );
   }
 
@@ -115,14 +137,22 @@ export function parseFeedResponse(response: unknown): ParsedFeed {
     } else if (typeof pagination.hasNext === 'boolean') {
       hasNextPage = pagination.hasNext;
     } else {
-      const page = pagination.page;
-      const totalPages = pagination.totalPages;
+      const currentPage =
+        getNumericValue(pagination.page) ??
+        getNumericValue(pagination.currentPage);
 
-      if (typeof page === 'number' && typeof totalPages === 'number') {
-        hasNextPage = page < totalPages;
+      const totalPages =
+        getNumericValue(pagination.totalPages) ??
+        getNumericValue(pagination.lastPage);
+
+      if (currentPage !== null && totalPages !== null) {
+        hasNextPage = currentPage < totalPages;
       }
     }
   }
 
-  return { posts, hasNextPage };
+  return {
+    posts,
+    hasNextPage,
+  };
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -8,13 +9,14 @@ import {
   Home,
   LoaderCircle,
   LogOut,
-  PlusSquare,
+  Plus,
+  RefreshCw,
   Search,
-  Sparkles,
   UserRound,
 } from 'lucide-react';
 
 import { useAuth } from '@/components/auth/auth-provider';
+import SocialityLogo from '@/components/branding/sociality-logo';
 import PostCard, { type FeedPost } from '@/components/feed/post-card';
 import { Button } from '@/components/ui/button';
 import { getFeed } from '@/lib/api/feed';
@@ -22,19 +24,47 @@ import { parseFeedResponse } from '@/lib/api/feed-parser';
 
 const PAGE_SIZE = 10;
 
-const navigation = [
+const mobileNavigation = [
   { href: '/feed', label: 'Home', icon: Home },
   { href: '/search', label: 'Search', icon: Search },
-  { href: '/posts/new', label: 'Create Post', icon: PlusSquare },
+  { href: '/posts/new', label: 'Create', icon: Plus },
   { href: '/me', label: 'Profile', icon: UserRound },
 ];
+
+function FeedSkeleton() {
+  return (
+    <div role='status' aria-label='Loading timeline' className='space-y-4'>
+      {[1, 2, 3].map((item) => (
+        <div
+          key={item}
+          className='animate-pulse overflow-hidden rounded-xl border border-white/10 bg-[#0A0D12]'
+        >
+          <div className='flex items-center gap-3 p-4'>
+            <div className='size-10 rounded-full bg-white/10' />
+            <div className='space-y-2'>
+              <div className='h-3 w-28 rounded bg-white/10' />
+              <div className='h-3 w-20 rounded bg-white/10' />
+            </div>
+          </div>
+
+          <div className='aspect-[4/3] bg-white/[0.04]' />
+
+          <div className='space-y-3 p-4'>
+            <div className='h-3 w-32 rounded bg-white/10' />
+            <div className='h-3 w-4/5 rounded bg-white/10' />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function FeedPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
 
   const feedQuery = useInfiniteQuery({
-    queryKey: ['feed'],
+    queryKey: ['feed', PAGE_SIZE],
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const response = await getFeed({
@@ -49,11 +79,13 @@ export default function FeedPage() {
         return undefined;
       }
 
-      if (lastPage.posts.length < PAGE_SIZE) {
-        return undefined;
+      if (lastPage.hasNextPage === true) {
+        return allPages.length + 1;
       }
 
-      return allPages.length + 1;
+      return lastPage.posts.length === PAGE_SIZE
+        ? allPages.length + 1
+        : undefined;
     },
   });
 
@@ -70,203 +102,235 @@ export default function FeedPage() {
     router.replace('/login');
   };
 
+  const avatarUrl = user?.avatarUrl;
+  const displayName = user?.name ?? 'Sociality member';
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
-    <div className='min-h-screen bg-[#0D0B12] text-white'>
-      <div className='mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 pb-24 pt-6 md:grid-cols-[220px_minmax(0,1fr)] md:px-8 md:pb-10 lg:grid-cols-[240px_minmax(0,640px)_260px]'>
-        <aside className='hidden md:block'>
-          <div className='sticky top-8 space-y-10'>
+    <div className='min-h-screen bg-black font-sans text-white'>
+      <header className='sticky top-0 z-40 border-b border-white/[0.08] bg-black/95 backdrop-blur-xl'>
+        <div className='mx-auto flex h-[68px] max-w-[1120px] items-center justify-between gap-4 px-4 sm:px-6'>
+          <SocialityLogo
+            href='/feed'
+            width={120}
+            height={25}
+            className='shrink-0'
+          />
+
+          <Link
+            href='/search'
+            aria-label='Search people and posts'
+            className='hidden h-10 w-full max-w-[360px] items-center gap-3 rounded-full border border-white/[0.08] bg-[#181D27] px-4 text-[13px] text-[#A4A7AE] transition-colors hover:border-[#7F51F9]/40 hover:text-white sm:flex'
+          >
+            <Search className='size-[17px]' />
+            <span>Search</span>
+          </Link>
+
+          <div className='flex shrink-0 items-center gap-2 sm:gap-3'>
             <Link
-              href='/feed'
-              className='flex items-center gap-3 text-2xl font-bold'
+              href='/search'
+              aria-label='Search'
+              className='flex size-9 items-center justify-center rounded-full text-[#D5D7DA] hover:bg-white/10 sm:hidden'
             >
-              <Sparkles className='size-8 text-purple-400' />
-              Sociality
+              <Search className='size-5' />
             </Link>
-
-            <nav aria-label='Main navigation' className='space-y-2'>
-              {navigation.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={item.href === '/feed' ? 'page' : undefined}
-                    className={`flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                      item.href === '/feed'
-                        ? 'bg-purple-600/20 text-purple-300'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <Icon className='size-5' />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <Button
-              variant='outline'
-              onClick={handleLogout}
-              className='w-full justify-start border-white/10 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white'
-            >
-              <LogOut className='mr-3 size-4' />
-              Logout
-            </Button>
-          </div>
-        </aside>
-
-        <main className='min-w-0'>
-          <header className='mb-6 flex items-center justify-between border-b border-white/10 pb-5'>
-            <div>
-              <div className='mb-2 flex items-center gap-2 md:hidden'>
-                <Sparkles className='size-6 text-purple-400' />
-                <span className='font-bold'>Sociality</span>
-              </div>
-              <h1 className='text-2xl font-bold'>Home Feed</h1>
-              <p className='mt-1 text-sm text-zinc-400'>
-                Moments from you and people you follow
-              </p>
-            </div>
 
             <Link
               href='/posts/new'
-              className='rounded-xl bg-purple-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-purple-600'
+              aria-label='Create a post'
+              className='flex size-9 items-center justify-center rounded-full text-[#D5D7DA] transition-colors hover:bg-white/10'
             >
-              Create
+              <Plus className='size-5' />
             </Link>
-          </header>
 
-          {feedQuery.isPending && (
-            <div role='status' className='space-y-5' aria-label='Loading feed'>
-              {[1, 2, 3].map((item) => (
-                <div
-                  key={item}
-                  className='animate-pulse overflow-hidden rounded-2xl border border-white/10 bg-[#15131B]'
-                >
-                  <div className='flex items-center gap-3 p-4'>
-                    <div className='size-11 rounded-full bg-white/10' />
-                    <div className='space-y-2'>
-                      <div className='h-3 w-32 rounded bg-white/10' />
-                      <div className='h-3 w-20 rounded bg-white/10' />
-                    </div>
-                  </div>
-                  <div className='aspect-[4/3] bg-white/5' />
-                  <div className='space-y-3 p-4'>
-                    <div className='h-3 w-4/5 rounded bg-white/10' />
-                    <div className='h-3 w-2/3 rounded bg-white/10' />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {feedQuery.isError && posts.length === 0 && (
-            <div
-              role='alert'
-              className='rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center'
+            <Link
+              href='/me'
+              aria-label='Open your profile'
+              className='relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#6936F2] text-xs font-semibold text-white ring-2 ring-transparent transition-all hover:ring-[#7F51F9]'
             >
-              <AlertCircle className='mx-auto mb-4 size-8 text-red-400' />
-              <h2 className='font-semibold'>Unable to load your feed</h2>
-              <p className='mt-2 break-words text-sm text-zinc-400'>
-                {feedQuery.error instanceof Error
-                  ? feedQuery.error.message
-                  : 'Please try again.'}
-              </p>
-              <Button className='mt-5' onClick={() => void feedQuery.refetch()}>
-                Try again
-              </Button>
-            </div>
-          )}
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt={displayName}
+                  fill
+                  sizes='36px'
+                  unoptimized
+                  className='object-cover'
+                />
+              ) : (
+                initial
+              )}
+            </Link>
 
-          {feedQuery.isSuccess && posts.length === 0 && (
-            <div className='rounded-2xl border border-white/10 bg-[#15131B] p-10 text-center'>
-              <Sparkles className='mx-auto mb-4 size-10 text-purple-400' />
-              <h2 className='text-xl font-semibold'>Your feed is ready</h2>
-              <p className='mt-3 text-sm leading-6 text-zinc-400'>
-                No posts are available yet. Follow other members or share your
-                first moment.
-              </p>
-              <div className='mt-6 flex flex-wrap justify-center gap-3'>
-                <Button
-                  variant='outline'
-                  onClick={() => router.push('/search')}
-                >
-                  Find people
-                </Button>
-                <Button onClick={() => router.push('/posts/new')}>
-                  Create a post
-                </Button>
-              </div>
-            </div>
-          )}
+            <button
+              type='button'
+              onClick={handleLogout}
+              aria-label='Log out'
+              title='Log out'
+              className='hidden size-9 items-center justify-center rounded-full text-[#A4A7AE] transition-colors hover:bg-white/10 hover:text-white sm:flex'
+            >
+              <LogOut className='size-[18px]' />
+            </button>
+          </div>
+        </div>
+      </header>
 
-          {posts.length > 0 && (
-            <div className='space-y-5'>
-              {posts.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
-            </div>
-          )}
-
-          {feedQuery.isFetchNextPageError && (
-            <p role='alert' className='mt-6 text-center text-sm text-red-400'>
-              Could not load more posts.
-            </p>
-          )}
-
-          {feedQuery.hasNextPage && posts.length > 0 && (
-            <div className='mt-8 text-center'>
-              <Button
-                variant='outline'
-                disabled={feedQuery.isFetchingNextPage}
-                onClick={() => void feedQuery.fetchNextPage()}
-                className='border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white'
-              >
-                {feedQuery.isFetchingNextPage ? (
-                  <>
-                    <LoaderCircle className='mr-2 size-4 animate-spin' />
-                    Loading...
-                  </>
-                ) : (
-                  'Load more posts'
-                )}
-              </Button>
-            </div>
-          )}
-
-          {feedQuery.isSuccess &&
-            !feedQuery.hasNextPage &&
-            posts.length > 0 && (
-              <p className='mt-8 text-center text-xs text-zinc-500'>
-                You&apos;re all caught up.
-              </p>
-            )}
-        </main>
-
-        <aside className='hidden lg:block'>
-          <div className='sticky top-8 rounded-2xl border border-white/10 bg-[#15131B] p-5'>
-            <p className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-              Your account
-            </p>
-            <p className='mt-4 font-semibold'>
-              {user?.name ?? 'Sociality member'}
-            </p>
-            <p className='mt-1 break-all text-sm text-zinc-400'>
-              @{user?.username ?? ''}
-            </p>
-            <p className='mt-5 text-sm leading-6 text-zinc-400'>
-              Connect, discover, and share moments with your community.
+      <main className='mx-auto w-full max-w-[640px] px-4 pb-28 pt-7 sm:px-5 sm:pb-14 sm:pt-9'>
+        <div className='mb-6 flex items-center justify-between gap-4'>
+          <div>
+            <h1 className='text-[22px] leading-8 font-semibold tracking-[-0.035em] sm:text-[24px]'>
+              Timeline
+            </h1>
+            <p className='mt-1 text-[12px] leading-5 text-[#A4A7AE]'>
+              Discover moments from your community
             </p>
           </div>
-        </aside>
-      </div>
+
+          <button
+            type='button'
+            onClick={() => void feedQuery.refetch()}
+            disabled={feedQuery.isFetching}
+            aria-label='Refresh timeline'
+            title='Refresh timeline'
+            className='flex size-9 items-center justify-center rounded-full border border-white/10 text-[#A4A7AE] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50'
+          >
+            <RefreshCw
+              className={`size-[17px] ${
+                feedQuery.isFetching ? 'animate-spin' : ''
+              }`}
+            />
+          </button>
+        </div>
+
+        <Link
+          href='/posts/new'
+          className='mb-6 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0A0D12] px-4 py-3 transition-colors hover:border-[#6936F2]/50'
+        >
+          <div className='flex size-9 shrink-0 items-center justify-center rounded-full bg-[#6936F2]/20 text-[#B9A1FF]'>
+            <Plus className='size-[18px]' />
+          </div>
+
+          <span className='flex-1 text-[13px] text-[#A4A7AE]'>
+            Share something with your community...
+          </span>
+
+          <span className='rounded-full bg-[#6936F2] px-3 py-1.5 text-[11px] font-semibold text-white'>
+            Post
+          </span>
+        </Link>
+
+        {feedQuery.isPending && <FeedSkeleton />}
+
+        {feedQuery.isError && posts.length === 0 && (
+          <section
+            role='alert'
+            className='rounded-xl border border-[#D9206E]/25 bg-[#0A0D12] px-6 py-10 text-center'
+          >
+            <AlertCircle className='mx-auto mb-4 size-9 text-[#D9206E]' />
+
+            <h2 className='text-[17px] font-semibold'>
+              Unable to load your timeline
+            </h2>
+
+            <p className='mx-auto mt-2 max-w-[380px] break-words text-[13px] leading-6 text-[#A4A7AE]'>
+              {feedQuery.error instanceof Error
+                ? feedQuery.error.message
+                : 'Please try again.'}
+            </p>
+
+            <Button
+              type='button'
+              onClick={() => void feedQuery.refetch()}
+              className='mt-5 rounded-full bg-[#6936F2] text-white hover:bg-[#7F51F9]'
+            >
+              Try again
+            </Button>
+          </section>
+        )}
+
+        {feedQuery.isSuccess && posts.length === 0 && (
+          <section className='rounded-xl border border-white/[0.08] bg-[#0A0D12] px-6 py-12 text-center'>
+            <div className='mx-auto mb-5 flex size-14 items-center justify-center rounded-full bg-[#6936F2]/15 text-[#A989FF]'>
+              <Home className='size-7' />
+            </div>
+
+            <h2 className='text-[19px] font-semibold tracking-tight'>
+              Your timeline is ready
+            </h2>
+
+            <p className='mx-auto mt-3 max-w-[330px] text-[13px] leading-6 text-[#A4A7AE]'>
+              No posts are available yet. Find people to follow or share your
+              first moment.
+            </p>
+
+            <div className='mt-6 flex flex-wrap justify-center gap-3'>
+              <Link
+                href='/search'
+                className='inline-flex h-10 items-center justify-center rounded-full border border-white/15 px-5 text-[12px] font-semibold text-white transition-colors hover:bg-white/10'
+              >
+                Find people
+              </Link>
+
+              <Link
+                href='/posts/new'
+                className='inline-flex h-10 items-center justify-center rounded-full bg-[#6936F2] px-5 text-[12px] font-semibold text-white transition-colors hover:bg-[#7F51F9]'
+              >
+                Create a post
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {posts.length > 0 && (
+          <div className='space-y-4'>
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        )}
+
+        {feedQuery.isFetchNextPageError && (
+          <div
+            role='alert'
+            className='mt-6 text-center text-[12px] text-rose-400'
+          >
+            Could not load more posts. Please try again.
+          </div>
+        )}
+
+        {feedQuery.hasNextPage && posts.length > 0 && (
+          <div className='mt-8 flex justify-center'>
+            <Button
+              type='button'
+              variant='outline'
+              disabled={feedQuery.isFetchingNextPage}
+              onClick={() => void feedQuery.fetchNextPage()}
+              className='h-10 rounded-full border-white/15 bg-transparent px-6 text-[12px] text-white hover:bg-white/10 hover:text-white'
+            >
+              {feedQuery.isFetchingNextPage ? (
+                <>
+                  <LoaderCircle className='size-4 animate-spin' />
+                  Loading...
+                </>
+              ) : (
+                'Load more posts'
+              )}
+            </Button>
+          </div>
+        )}
+
+        {feedQuery.isSuccess && !feedQuery.hasNextPage && posts.length > 0 && (
+          <p className='mt-8 text-center text-[12px] text-[#717680]'>
+            You&apos;re all caught up.
+          </p>
+        )}
+      </main>
 
       <nav
         aria-label='Mobile navigation'
-        className='fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-white/10 bg-[#15131B]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden'
+        className='fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-[#0A0D12]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden'
       >
-        {navigation.map((item) => {
+        {mobileNavigation.map((item) => {
           const Icon = item.icon;
 
           return (
@@ -275,8 +339,8 @@ export default function FeedPage() {
               href={item.href}
               aria-label={item.label}
               aria-current={item.href === '/feed' ? 'page' : undefined}
-              className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${
-                item.href === '/feed' ? 'text-purple-400' : 'text-zinc-400'
+              className={`flex min-h-[64px] flex-col items-center justify-center gap-1 text-[10px] ${
+                item.href === '/feed' ? 'text-[#A989FF]' : 'text-[#A4A7AE]'
               }`}
             >
               <Icon className='size-5' />
@@ -284,6 +348,16 @@ export default function FeedPage() {
             </Link>
           );
         })}
+
+        <button
+          type='button'
+          onClick={handleLogout}
+          aria-label='Log out'
+          className='flex min-h-[64px] flex-col items-center justify-center gap-1 text-[10px] text-[#A4A7AE]'
+        >
+          <LogOut className='size-5' />
+          <span>Logout</span>
+        </button>
       </nav>
     </div>
   );
