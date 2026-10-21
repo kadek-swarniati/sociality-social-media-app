@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearSessionToken, getSessionToken } from '@/lib/auth/session';
 
 export const api = axios.create({
   baseURL:
@@ -10,13 +11,45 @@ export const api = axios.create({
   },
 });
 
-export function setApiToken(token: string | null) {
+export function setApiToken(token: string | null): void {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
   } else {
     delete api.defaults.headers.common.Authorization;
   }
 }
+
+api.interceptors.request.use((config) => {
+  const token = getSessionToken();
+
+  if (token) {
+    config.headers.set('Authorization', `Bearer ${token}`);
+  } else {
+    config.headers.delete('Authorization');
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      getSessionToken()
+    ) {
+      clearSessionToken();
+      setApiToken(null);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('sociality:unauthorized'));
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export function getApiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
@@ -43,6 +76,10 @@ export function getApiErrorMessage(error: unknown): string {
     }
 
     return `Request failed (${error.response.status}).`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
   }
 
   return 'Something went wrong. Please try again.';

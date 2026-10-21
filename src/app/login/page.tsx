@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 
 import AuthShell from '@/components/auth/auth-shell';
+import { useAuth } from '@/components/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,10 +27,10 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState('');
-  const [loginSucceeded, setLoginSucceeded] = useState(false);
 
   const {
     register,
@@ -45,8 +46,9 @@ export default function LoginPage() {
 
   const mutation = useMutation({
     mutationFn: loginUser,
-    onSuccess: () => {
-      setLoginSucceeded(true);
+    onSuccess: (response) => {
+      login(response.data.token, response.data.user);
+      router.replace('/feed');
     },
     onError: (error) => {
       setServerError(getApiErrorMessage(error));
@@ -55,7 +57,6 @@ export default function LoginPage() {
 
   const onSubmit = (values: LoginFormValues) => {
     setServerError('');
-    setLoginSucceeded(false);
     mutation.mutate(values);
   };
 
@@ -70,15 +71,6 @@ export default function LoginPage() {
           className='mb-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300'
         >
           Account created successfully. Please sign in.
-        </div>
-      )}
-
-      {loginSucceeded && (
-        <div
-          role='status'
-          className='mb-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300'
-        >
-          Login request succeeded. Session setup is the next step.
         </div>
       )}
 
@@ -162,14 +154,6 @@ export default function LoginPage() {
           </Link>
         </p>
       </form>
-
-      <button
-        type='button'
-        onClick={() => router.push('/')}
-        className='mt-8 block w-full text-center text-xs text-zinc-500 hover:text-white'
-      >
-        Back to home
-      </button>
     </AuthShell>
   );
 }
