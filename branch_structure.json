@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/sociality-mvp",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "feat/sociality-mvp": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "feat/sociality-mvp",
+    "origin"
+  ]
+}
