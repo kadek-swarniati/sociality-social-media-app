@@ -7,144 +7,160 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-
-  --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-  --font-mono: var(--font-geist-mono), monospace;
-  --font-heading: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
 }
 
 :root {
   color-scheme: dark;
 
+  /* Official Figma neutral palette */
+  --sociality-neutral-25: #fdfdfd;
+  --sociality-neutral-50: #fafafa;
+  --sociality-neutral-100: #f5f5f5;
+  --sociality-neutral-200: #e9eaeb;
+  --sociality-neutral-300: #d5d7da;
+  --sociality-neutral-400: #a4a7ae;
+  --sociality-neutral-500: #717680;
+  --sociality-neutral-600: #535862;
+  --sociality-neutral-700: #414651;
+  --sociality-neutral-800: #252b37;
+  --sociality-neutral-900: #181d27;
+  --sociality-neutral-950: #0a0d12;
+
+  /* Official Figma primary palette */
+  --sociality-primary-100: #f6f9ff;
+  --sociality-primary-200: #7f51f9;
+  --sociality-primary-300: #6936f2;
+
+  /* Official Figma accents */
+  --sociality-red: #d9206e;
+  --sociality-green: #079455;
+  --sociality-yellow: #fdb022;
+
+  --sociality-white: #ffffff;
+  --sociality-black: #000000;
+
+  /* Figma spacing scale */
+  --space-none: 0px;
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+  --space-2xl: 20px;
+  --space-3xl: 24px;
+  --space-4xl: 32px;
+  --space-5xl: 40px;
+  --space-6xl: 48px;
+  --space-7xl: 64px;
+  --space-8xl: 80px;
+  --space-9xl: 96px;
+  --space-10xl: 128px;
+  --space-11xl: 140px;
+
+  /* Figma radius scale */
+  --radius-none: 0px;
+  --radius-xxs: 2px;
+  --radius-xs: 4px;
+  --radius-sm-token: 6px;
+  --radius-md-token: 8px;
+  --radius-lg-token: 10px;
+  --radius-xl-token: 12px;
+  --radius-2xl-token: 16px;
+  --radius-3xl-token: 20px;
+  --radius-4xl-token: 24px;
+  --radius-full: 9999px;
+
+  /* Shadcn semantic tokens */
   --background: #000000;
   --foreground: #ffffff;
 
-  --card: #101014;
+  --card: #0a0d12;
   --card-foreground: #ffffff;
 
-  --popover: #141419;
+  --popover: #0a0d12;
   --popover-foreground: #ffffff;
 
-  --primary: #6d28d9;
+  --primary: #6936f2;
   --primary-foreground: #ffffff;
 
-  --secondary: #1c1c24;
+  --secondary: #181d27;
   --secondary-foreground: #ffffff;
 
-  --muted: #18181e;
-  --muted-foreground: #a1a1aa;
+  --muted: #181d27;
+  --muted-foreground: #a4a7ae;
 
-  --accent: #272034;
+  --accent: #252b37;
   --accent-foreground: #ffffff;
 
-  --destructive: #ef4444;
+  --destructive: #d9206e;
 
-  --border: #27272f;
-  --input: #27272f;
-  --ring: #7c3aed;
+  --border: #252b37;
+  --input: #252b37;
+  --ring: #7f51f9;
 
-  --chart-1: #7c3aed;
-  --chart-2: #a855f7;
-  --chart-3: #c084fc;
-  --chart-4: #5b21b6;
-  --chart-5: #4c1d95;
+  --radius: 10px;
 
-  --radius: 0.625rem;
+  --chart-1: #6936f2;
+  --chart-2: #7f51f9;
+  --chart-3: #079455;
+  --chart-4: #fdb022;
+  --chart-5: #d9206e;
 
-  --sidebar: #08080b;
+  --sidebar: #0a0d12;
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #6d28d9;
+  --sidebar-primary: #6936f2;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #21172e;
+  --sidebar-accent: #181d27;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #27272f;
-  --sidebar-ring: #7c3aed;
+  --sidebar-border: #252b37;
+  --sidebar-ring: #7f51f9;
 }
 
 .dark {
   color-scheme: dark;
-
-  --background: #000000;
-  --foreground: #ffffff;
-
-  --card: #101014;
-  --card-foreground: #ffffff;
-
-  --popover: #141419;
-  --popover-foreground: #ffffff;
-
-  --primary: #6d28d9;
-  --primary-foreground: #ffffff;
-
-  --secondary: #1c1c24;
-  --secondary-foreground: #ffffff;
-
-  --muted: #18181e;
-  --muted-foreground: #a1a1aa;
-
-  --accent: #272034;
-  --accent-foreground: #ffffff;
-
-  --destructive: #ef4444;
-
-  --border: #27272f;
-  --input: #27272f;
-  --ring: #7c3aed;
-
-  --sidebar: #08080b;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #6d28d9;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #21172e;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #27272f;
-  --sidebar-ring: #7c3aed;
 }
 
 @layer base {
@@ -153,15 +169,21 @@
   }
 
   html {
-    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-    font-size: 16px;
+    font-family:
+      'SF Pro Display',
+      'SF Pro Text',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Arial,
+      sans-serif;
     scroll-behavior: smooth;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     min-height: 100vh;
-    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    font-family: inherit;
   }
 
   button,
@@ -171,7 +193,7 @@
     font: inherit;
   }
 
-  button {
+  button:not(:disabled) {
     cursor: pointer;
   }
 
@@ -180,7 +202,7 @@
   }
 
   ::selection {
-    background: #6d28d9;
-    color: #ffffff;
+    background: var(--sociality-primary-300);
+    color: white;
   }
 }
