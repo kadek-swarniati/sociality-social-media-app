@@ -9,11 +9,14 @@ import {
   ArrowLeft,
   Bookmark,
   Heart,
+  LoaderCircle,
   MessageCircle,
   Trash2,
+  Users,
 } from 'lucide-react';
 
 import { useAuth } from '@/components/auth/auth-provider';
+import CommentsSection from '@/components/posts/comments-section';
 import { getApiErrorMessage } from '@/lib/api/client';
 import {
   deletePost,
@@ -22,8 +25,14 @@ import {
   unlikePost,
   savePost,
   unsavePost,
+  type PostDetail,
 } from '@/lib/api/posts';
-import CommentsSection from '@/components/posts/comments-section';
+import {
+  getSocialActionStatus,
+  type SocialActionStatus,
+} from '@/lib/api/social-actions';
+
+const STATUS_KEY = ['social-action-status'];
 
 export default function PostDetailPage() {
   const params = useParams<{ id: string }>();
@@ -43,9 +52,30 @@ export default function PostDetailPage() {
     enabled: validId,
   });
 
-  const post = postQuery.data;
+  const statusQuery = useQuery({
+    queryKey: STATUS_KEY,
+    queryFn: getSocialActionStatus,
+    enabled: validId && isAuthenticated,
+    staleTime: 30_000,
+    retry: 1,
+  });
 
-  const invalidatePostLists = async () => {
+  const post = postQuery.data;
+  const status = statusQuery.data;
+
+  const isLiked = status?.likedPostIds.has(postId) ?? post?.isLiked ?? false;
+
+  const isSaved = status?.savedPostIds.has(postId) ?? post?.isSaved ?? false;
+
+  const actionsReady = isAuthenticated && statusQuery.isSuccess;
+
+  const isOwner =
+    !!post &&
+    !!user &&
+    ((post.author.id !== null && Number(user.id) === post.author.id) ||
+      (!!post.author.username && user.username === post.author.username));
+
+  async function invalidatePostLists() {
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: ['post', postId],
@@ -56,95 +86,168 @@ export default function PostDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ['me'],
       }),
+      queryClient.invalidateQueries({
+        queryKey: ['explore'],
+      }),
     ]);
-  };
+  }
+
+  function updateCachedStatus(kind: 'like' | 'save', enabled: boolean) {
+    queryClient.setQueryData<SocialActionStatus>(STATUS_KEY, (previous) => {
+      if (!previous) return previous;
+
+      const likedPostIds = new Set(previous.likedPostIds);
+      const savedPostIds = new Set(previous.savedPostIds);
+
+      const target = kind === 'like' ? likedPostIds : savedPostIds;
+
+      if (enabled) {
+        target.add(postId);
+      } else {
+        target.delete(postId);
+      }
+
+      return {
+        likedPostIds,
+        savedPostIds,
+      };
+    });
+  }
 
   const likeMutation = useMutation({
-    mutationFn: async (liked: boolean) => {
-      if (liked) {
+    mutationFn: async (currentlyLiked: boolean) => {
+      if (currentlyLiked) {
         await unlikePost(postId);
       } else {
         await likePost(postId);
       }
     },
-    onMutate: async (liked) => {
-      await queryClient.cancelQueries({
-        queryKey: ['post', postId],
-      });
+    onMutate: async (currentlyLiked) => {
+      setActionError('');
 
-      const previous = queryClient.getQueryData<NonNullable<typeof post>>([
+      await Promise.all([
+        queryClient.cancelQueries({
+          queryKey: STATUS_KEY,
+        }),
+        queryClient.cancelQueries({
+          queryKey: ['post', postId],
+        }),
+      ]);
+
+      const previousStatus =
+        queryClient.getQueryData<SocialActionStatus>(STATUS_KEY);
+
+      const previousPost = queryClient.getQueryData<PostDetail>([
         'post',
         postId,
       ]);
 
-      if (previous) {
-        queryClient.setQueryData(['post', postId], {
-          ...previous,
-          isLiked: !liked,
-          likesCount: Math.max(0, previous.likesCount + (liked ? -1 : 1)),
+      updateCachedStatus('like', !currentlyLiked);
+
+      if (previousPost) {
+        queryClient.setQueryData<PostDetail>(['post', postId], {
+          ...previousPost,
+          isLiked: !currentlyLiked,
+          likesCount: Math.max(
+            0,
+            previousPost.likesCount + (currentlyLiked ? -1 : 1)
+          ),
         });
       }
 
-      return { previous };
+      return {
+        previousStatus,
+        previousPost,
+      };
     },
-    onError: (error, _liked, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['post', postId], context.previous);
+    onError: (error, _value, context) => {
+      if (context?.previousStatus) {
+        queryClient.setQueryData(STATUS_KEY, context.previousStatus);
+      }
+
+      if (context?.previousPost) {
+        queryClient.setQueryData(['post', postId], context.previousPost);
       }
 
       setActionError(getApiErrorMessage(error));
     },
-    onSettled: invalidatePostLists,
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: STATUS_KEY,
+        }),
+        invalidatePostLists(),
+      ]);
+    },
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (saved: boolean) => {
-      if (saved) {
+    mutationFn: async (currentlySaved: boolean) => {
+      if (currentlySaved) {
         await unsavePost(postId);
       } else {
         await savePost(postId);
       }
     },
-    onMutate: async (saved) => {
-      await queryClient.cancelQueries({
-        queryKey: ['post', postId],
-      });
+    onMutate: async (currentlySaved) => {
+      setActionError('');
 
-      const previous = queryClient.getQueryData<NonNullable<typeof post>>([
+      await Promise.all([
+        queryClient.cancelQueries({
+          queryKey: STATUS_KEY,
+        }),
+        queryClient.cancelQueries({
+          queryKey: ['post', postId],
+        }),
+      ]);
+
+      const previousStatus =
+        queryClient.getQueryData<SocialActionStatus>(STATUS_KEY);
+
+      const previousPost = queryClient.getQueryData<PostDetail>([
         'post',
         postId,
       ]);
 
-      if (previous) {
-        queryClient.setQueryData(['post', postId], {
-          ...previous,
-          isSaved: !saved,
+      updateCachedStatus('save', !currentlySaved);
+
+      if (previousPost) {
+        queryClient.setQueryData<PostDetail>(['post', postId], {
+          ...previousPost,
+          isSaved: !currentlySaved,
         });
       }
 
-      return { previous };
+      return {
+        previousStatus,
+        previousPost,
+      };
     },
-    onError: (error, _saved, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['post', postId], context.previous);
+    onError: (error, _value, context) => {
+      if (context?.previousStatus) {
+        queryClient.setQueryData(STATUS_KEY, context.previousStatus);
+      }
+
+      if (context?.previousPost) {
+        queryClient.setQueryData(['post', postId], context.previousPost);
       }
 
       setActionError(getApiErrorMessage(error));
     },
-    onSettled: invalidatePostLists,
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: STATUS_KEY,
+        }),
+        invalidatePostLists(),
+      ]);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deletePost(postId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['feed'],
-      });
-
-      await queryClient.invalidateQueries({
-        queryKey: ['me'],
-      });
-
+      await invalidatePostLists();
       router.replace('/feed');
     },
     onError: (error) => {
@@ -153,25 +256,13 @@ export default function PostDetailPage() {
     },
   });
 
-  function requireLogin(): boolean {
-    if (isAuthenticated) return true;
-
-    router.push(`/login?returnTo=${encodeURIComponent(`/posts/${postId}`)}`);
-
-    return false;
-  }
-
-  const isOwner =
-    !!post &&
-    !!user &&
-    ((post.author.id !== null && Number(user.id) === post.author.id) ||
-      (!!post.author.username && user.username === post.author.username));
-
   if (!validId) {
     return (
-      <main className='mx-auto max-w-2xl p-8'>
+      <main className='min-h-screen bg-black p-8 text-white'>
         <p>Invalid post ID.</p>
-        <Link href='/feed'>Back to Timeline</Link>
+        <Link href='/feed' className='mt-4 inline-block text-[#A989FF]'>
+          Back to Timeline
+        </Link>
       </main>
     );
   }
@@ -195,7 +286,10 @@ export default function PostDetailPage() {
             Loading post...
           </div>
         ) : postQuery.isError ? (
-          <div role='alert' className='rounded-2xl border border-white/10 p-6'>
+          <section
+            role='alert'
+            className='rounded-2xl border border-white/10 bg-[#0A0D12] p-6'
+          >
             <p>{getApiErrorMessage(postQuery.error)}</p>
             <button
               type='button'
@@ -204,17 +298,17 @@ export default function PostDetailPage() {
             >
               Try again
             </button>
-          </div>
+          </section>
         ) : post ? (
           <>
             <article className='overflow-hidden rounded-2xl border border-white/10 bg-[#0A0D12]'>
-              <div className='flex items-center justify-between gap-3 p-5'>
+              <header className='flex items-center justify-between gap-3 p-5'>
                 <div>
                   <Link
                     href={
                       post.author.username
                         ? `/profile/${encodeURIComponent(post.author.username)}`
-                        : '#'
+                        : `/posts/${postId}`
                     }
                     className='font-semibold hover:text-[#A989FF]'
                   >
@@ -237,7 +331,7 @@ export default function PostDetailPage() {
                     <Trash2 className='size-5' />
                   </button>
                 )}
-              </div>
+              </header>
 
               {post.imageUrl && (
                 <div className='relative aspect-square bg-[#181D27]'>
@@ -256,68 +350,108 @@ export default function PostDetailPage() {
                 <div className='flex items-center gap-5'>
                   <button
                     type='button'
-                    disabled={likeMutation.isPending || post.isLiked === null}
+                    disabled={!actionsReady || likeMutation.isPending}
                     onClick={() => {
-                      if (!requireLogin()) return;
-                      if (post.isLiked === null) return;
-
-                      setActionError('');
-                      likeMutation.mutate(post.isLiked);
+                      likeMutation.mutate(isLiked);
                     }}
-                    aria-label={post.isLiked ? 'Unlike post' : 'Like post'}
-                    aria-pressed={post.isLiked ?? false}
-                    className='flex items-center gap-2 disabled:opacity-40'
+                    aria-label={isLiked ? 'Unlike post' : 'Like post'}
+                    aria-pressed={isLiked}
+                    className='flex items-center gap-2 transition-colors hover:text-[#D9206E] disabled:opacity-40'
                   >
-                    <Heart
-                      className={`size-5 ${
-                        post.isLiked ? 'fill-[#D9206E] text-[#D9206E]' : ''
-                      }`}
-                    />
+                    {likeMutation.isPending ? (
+                      <LoaderCircle className='size-5 animate-spin' />
+                    ) : (
+                      <Heart
+                        className={`size-5 ${
+                          isLiked ? 'fill-[#D9206E] text-[#D9206E]' : ''
+                        }`}
+                      />
+                    )}
                     <span>{post.likesCount}</span>
                   </button>
 
-                  <a href='#comments' className='flex items-center gap-2'>
+                  <a
+                    href='#comments'
+                    className='flex items-center gap-2 hover:text-[#A989FF]'
+                  >
                     <MessageCircle className='size-5' />
                     <span>{post.commentsCount}</span>
                   </a>
 
                   <button
                     type='button'
-                    disabled={saveMutation.isPending || post.isSaved === null}
+                    disabled={!actionsReady || saveMutation.isPending}
                     onClick={() => {
-                      if (!requireLogin()) return;
-                      if (post.isSaved === null) return;
-
-                      setActionError('');
-                      saveMutation.mutate(post.isSaved);
+                      saveMutation.mutate(isSaved);
                     }}
-                    aria-label={post.isSaved ? 'Unsave post' : 'Save post'}
-                    aria-pressed={post.isSaved ?? false}
-                    className='ml-auto disabled:opacity-40'
+                    aria-label={isSaved ? 'Unsave post' : 'Save post'}
+                    aria-pressed={isSaved}
+                    className='ml-auto hover:text-[#A989FF] disabled:opacity-40'
                   >
-                    <Bookmark
-                      className={`size-5 ${
-                        post.isSaved ? 'fill-[#6936F2] text-[#A989FF]' : ''
-                      }`}
-                    />
+                    {saveMutation.isPending ? (
+                      <LoaderCircle className='size-5 animate-spin' />
+                    ) : (
+                      <Bookmark
+                        className={`size-5 ${
+                          isSaved ? 'fill-[#6936F2] text-[#A989FF]' : ''
+                        }`}
+                      />
+                    )}
                   </button>
                 </div>
 
-                {(post.isLiked === null || post.isSaved === null) && (
+                {statusQuery.isPending && (
                   <p className='mt-3 text-xs text-[#A4A7AE]'>
-                    Some action states are unavailable in the post response and
-                    need API verification.
+                    Loading your Like and Save status...
                   </p>
                 )}
 
+                {statusQuery.isError && (
+                  <div role='alert' className='mt-3 text-xs text-rose-400'>
+                    <p>Unable to load Like and Save status.</p>
+                    <button
+                      type='button'
+                      onClick={() => void statusQuery.refetch()}
+                      className='mt-2 font-semibold text-[#A989FF]'
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {!isAuthenticated && (
+                  <p className='mt-3 text-xs text-[#A4A7AE]'>
+                    <Link
+                      href={`/login?returnTo=${encodeURIComponent(
+                        `/posts/${postId}`
+                      )}`}
+                      className='text-[#A989FF]'
+                    >
+                      Log in
+                    </Link>{' '}
+                    to Like or Save this post.
+                  </p>
+                )}
+
+                <Link
+                  href={`/posts/${postId}/likes`}
+                  className='mt-4 inline-flex items-center gap-2 text-xs text-[#A989FF] hover:underline'
+                >
+                  <Users className='size-4' />
+                  View people who liked this post
+                </Link>
+
                 {post.caption && (
-                  <p className='mt-4 whitespace-pre-wrap text-sm leading-6'>
+                  <p className='mt-4 whitespace-pre-wrap break-words text-sm leading-6'>
                     {post.caption}
                   </p>
                 )}
 
                 {post.createdAt && (
-                  <time className='mt-3 block text-xs text-[#717680]'>
+                  <time
+                    dateTime={post.createdAt}
+                    className='mt-3 block text-xs text-[#717680]'
+                  >
                     {new Date(post.createdAt).toLocaleString()}
                   </time>
                 )}

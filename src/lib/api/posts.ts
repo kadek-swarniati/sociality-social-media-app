@@ -123,17 +123,30 @@ export function parsePostDetail(value: unknown): PostDetail {
 
   return {
     id,
+
     caption: asString(post.caption) || asString(post.content),
+
     imageUrl:
       asUrl(post.imageUrl) ?? asUrl(post.image_url) ?? asUrl(post.image),
+
     createdAt: asString(post.createdAt) || asString(post.created_at),
+
     author: parseAuthor(post.author ?? post.user),
-    likesCount: Math.max(0, asNumber(post.likesCount ?? post.likes_count ?? 0)),
+
+    likesCount: Math.max(
+      0,
+      asNumber(post.likeCount ?? post.likesCount ?? post.likes_count ?? 0)
+    ),
+
     commentsCount: Math.max(
       0,
-      asNumber(post.commentsCount ?? post.comments_count ?? 0)
+      asNumber(
+        post.commentCount ?? post.commentsCount ?? post.comments_count ?? 0
+      )
     ),
+
     isLiked: asBoolean(post.isLiked ?? post.is_liked ?? post.likedByMe),
+
     isSaved: asBoolean(post.isSaved ?? post.is_saved ?? post.savedByMe),
   };
 }
