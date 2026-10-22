@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   Bookmark,
   Heart,
-  LoaderCircle,
   MessageCircle,
   Trash2,
 } from 'lucide-react';
