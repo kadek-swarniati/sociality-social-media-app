@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/client';
+import { getPost } from '@/lib/api/posts';
 
 type JsonObject = Record<string, unknown>;
 
@@ -16,8 +17,8 @@ export type AccountPost = {
   id: number;
   caption: string;
   imageUrl: string | null;
-  likesCount: number;
-  commentsCount: number;
+  likesCount: number | null;
+  commentsCount: number | null;
 };
 
 export type AccountPostPage = {
@@ -55,8 +56,14 @@ function number(value: unknown): number | null {
   return Number.isFinite(result) ? result : null;
 }
 
+function count(value: unknown): number | null {
+  const result = number(value);
+
+  return result === null ? null : Math.max(0, result);
+}
+
 function imageUrl(value: unknown): string | null {
-  const result = string(value);
+  const result = string(value).trim();
 
   if (
     result.startsWith('https://') ||
@@ -119,14 +126,20 @@ function getArray(value: unknown): {
   metadata: JsonObject;
 } {
   if (Array.isArray(value)) {
-    return { items: value, metadata: {} };
+    return {
+      items: value,
+      metadata: {},
+    };
   }
 
   const root = object(value);
   const data = root.data ?? value;
 
   if (Array.isArray(data)) {
-    return { items: data, metadata: root };
+    return {
+      items: data,
+      metadata: root,
+    };
   }
 
   const payload = object(data);
@@ -158,9 +171,11 @@ function parsePostPage(
 ): AccountPostPage {
   const { items, metadata } = getArray(response);
 
-  const posts = items.map((entry) => {
+  const posts: AccountPost[] = items.map((entry: unknown) => {
     const raw = object(entry);
+
     const post = isObject(raw.post) ? raw.post : raw;
+
     const id = number(post.id);
 
     if (id === null || !Number.isSafeInteger(id) || id <= 0) {
@@ -169,17 +184,24 @@ function parsePostPage(
 
     return {
       id,
-      caption: string(post.caption),
+
+      caption: string(post.caption) || string(post.content),
+
       imageUrl:
         imageUrl(post.imageUrl) ??
         imageUrl(post.image_url) ??
         imageUrl(post.image),
-      likesCount: number(post.likesCount ?? post.likes_count) ?? 0,
-      commentsCount: number(post.commentsCount ?? post.comments_count) ?? 0,
+
+      likesCount: count(post.likeCount ?? post.likesCount ?? post.likes_count),
+
+      commentsCount: count(
+        post.commentCount ?? post.commentsCount ?? post.comments_count
+      ),
     };
   });
 
   const pagination = object(metadata.pagination);
+
   const explicit =
     pagination.hasNextPage ??
     pagination.hasNext ??
@@ -195,7 +217,32 @@ function parsePostPage(
         ? page < totalPages
         : items.length === limit;
 
-  return { items: posts, hasNextPage };
+  return {
+    items: posts,
+    hasNextPage,
+  };
+}
+
+async function enrichSavedPosts(posts: AccountPost[]): Promise<AccountPost[]> {
+  return Promise.all(
+    posts.map(async (post) => {
+      if (post.likesCount !== null && post.commentsCount !== null) {
+        return post;
+      }
+
+      try {
+        const detail = await getPost(post.id);
+
+        return {
+          ...post,
+          likesCount: detail.likesCount,
+          commentsCount: detail.commentsCount,
+        };
+      } catch {
+        return post;
+      }
+    })
+  );
 }
 
 export async function getMyPostList(
@@ -211,10 +258,22 @@ export async function getMyPostList(
         : '/me/saved';
 
   const response = await api.get<unknown>(endpoint, {
-    params: { page, limit },
+    params: {
+      page,
+      limit,
+    },
   });
 
-  return parsePostPage(response.data, page, limit);
+  const result = parsePostPage(response.data, page, limit);
+
+  if (category !== 'saved') {
+    return result;
+  }
+
+  return {
+    ...result,
+    items: await enrichSavedPosts(result.items),
+  };
 }
 
 export async function updateMyProfile(
@@ -223,8 +282,11 @@ export async function updateMyProfile(
   const formData = new FormData();
 
   formData.append('name', payload.name.trim());
+
   formData.append('username', payload.username.trim());
+
   formData.append('phone', payload.phone.trim());
+
   formData.append('bio', payload.bio.trim());
 
   if (payload.avatar) {
