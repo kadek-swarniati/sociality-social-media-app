@@ -87,7 +87,7 @@ export default function PostDetailPage() {
         queryKey: ['me'],
       }),
       queryClient.invalidateQueries({
-        queryKey: ['explore'],
+        queryKey: ['explore-posts'],
       }),
     ]);
   }
@@ -97,6 +97,7 @@ export default function PostDetailPage() {
       if (!previous) return previous;
 
       const likedPostIds = new Set(previous.likedPostIds);
+
       const savedPostIds = new Set(previous.savedPostIds);
 
       const target = kind === 'like' ? likedPostIds : savedPostIds;
@@ -122,6 +123,7 @@ export default function PostDetailPage() {
         await likePost(postId);
       }
     },
+
     onMutate: async (currentlyLiked) => {
       setActionError('');
 
@@ -160,6 +162,7 @@ export default function PostDetailPage() {
         previousPost,
       };
     },
+
     onError: (error, _value, context) => {
       if (context?.previousStatus) {
         queryClient.setQueryData(STATUS_KEY, context.previousStatus);
@@ -171,6 +174,7 @@ export default function PostDetailPage() {
 
       setActionError(getApiErrorMessage(error));
     },
+
     onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -189,6 +193,7 @@ export default function PostDetailPage() {
         await savePost(postId);
       }
     },
+
     onMutate: async (currentlySaved) => {
       setActionError('');
 
@@ -223,6 +228,7 @@ export default function PostDetailPage() {
         previousPost,
       };
     },
+
     onError: (error, _value, context) => {
       if (context?.previousStatus) {
         queryClient.setQueryData(STATUS_KEY, context.previousStatus);
@@ -234,6 +240,7 @@ export default function PostDetailPage() {
 
       setActionError(getApiErrorMessage(error));
     },
+
     onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -246,10 +253,12 @@ export default function PostDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => deletePost(postId),
+
     onSuccess: async () => {
       await invalidatePostLists();
       router.replace('/feed');
     },
+
     onError: (error) => {
       setActionError(getApiErrorMessage(error));
       setConfirmDelete(false);
@@ -260,6 +269,7 @@ export default function PostDetailPage() {
     return (
       <main className='min-h-screen bg-black p-8 text-white'>
         <p>Invalid post ID.</p>
+
         <Link href='/feed' className='mt-4 inline-block text-[#A989FF]'>
           Back to Timeline
         </Link>
@@ -291,6 +301,7 @@ export default function PostDetailPage() {
             className='rounded-2xl border border-white/10 bg-[#0A0D12] p-6'
           >
             <p>{getApiErrorMessage(postQuery.error)}</p>
+
             <button
               type='button'
               onClick={() => void postQuery.refetch()}
@@ -314,6 +325,7 @@ export default function PostDetailPage() {
                   >
                     {post.author.name}
                   </Link>
+
                   <p className='text-xs text-[#A4A7AE]'>
                     {post.author.username
                       ? `@${post.author.username}`
@@ -334,14 +346,15 @@ export default function PostDetailPage() {
               </header>
 
               {post.imageUrl && (
-                <div className='relative aspect-square bg-[#181D27]'>
+                <div className='flex w-full items-center justify-center overflow-hidden bg-[#0A0D12]'>
                   <Image
                     src={post.imageUrl}
                     alt={post.caption || 'Sociality post'}
-                    fill
+                    width={1200}
+                    height={1200}
                     unoptimized
                     sizes='(max-width: 680px) 100vw, 680px'
-                    className='object-contain'
+                    className='block h-auto max-h-[75vh] w-full object-contain'
                   />
                 </div>
               )}
@@ -367,6 +380,7 @@ export default function PostDetailPage() {
                         }`}
                       />
                     )}
+
                     <span>{post.likesCount}</span>
                   </button>
 
@@ -400,15 +414,16 @@ export default function PostDetailPage() {
                   </button>
                 </div>
 
-                {statusQuery.isPending && (
+                {statusQuery.isPending && isAuthenticated && (
                   <p className='mt-3 text-xs text-[#A4A7AE]'>
                     Loading your Like and Save status...
                   </p>
                 )}
 
-                {statusQuery.isError && (
+                {statusQuery.isError && isAuthenticated && (
                   <div role='alert' className='mt-3 text-xs text-rose-400'>
                     <p>Unable to load Like and Save status.</p>
+
                     <button
                       type='button'
                       onClick={() => void statusQuery.refetch()}
@@ -472,9 +487,11 @@ export default function PostDetailPage() {
                 className='mt-4 rounded-xl border border-rose-500/30 bg-[#181D27] p-5'
               >
                 <h2 className='font-semibold'>Delete this post?</h2>
+
                 <p className='mt-2 text-sm text-[#A4A7AE]'>
                   This action cannot be undone.
                 </p>
+
                 <div className='mt-4 flex gap-3'>
                   <button
                     type='button'
@@ -483,6 +500,7 @@ export default function PostDetailPage() {
                   >
                     Cancel
                   </button>
+
                   <button
                     type='button'
                     disabled={deleteMutation.isPending}
