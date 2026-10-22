@@ -1,300 +1,318 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { ArrowLeft, LoaderCircle, Save } from 'lucide-react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Heart, LoaderCircle, Pencil, Users } from 'lucide-react';
 
-import { getMyProfile, updateMyProfile } from '@/lib/api/account';
+import {
+  getMyProfile,
+  getMyPostList,
+  type AccountPost,
+} from '@/lib/api/account';
+import { getMyFollowers, getMyFollowing } from '@/lib/api/users';
 import { getApiErrorMessage } from '@/lib/api/client';
 
-const schema = z.object({
-  name: z.string().trim().min(2).max(100),
-  username: z
-    .string()
-    .trim()
-    .min(3)
-    .max(30)
-    .regex(/^[a-zA-Z0-9_]+$/, 'Use letters, numbers, or underscores.'),
-  phone: z.string().trim().max(30),
-  bio: z.string().trim().max(500),
-});
+type Tab = 'posts' | 'likes' | 'saved' | 'followers' | 'following';
 
-type FormValues = z.infer<typeof schema>;
+const PAGE_SIZE = 12;
 
-export default function EditProfilePage() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
+function PostTile({ post }: { post: AccountPost }) {
+  return (
+    <Link
+      href={`/posts/${post.id}`}
+      className='group overflow-hidden rounded-xl border border-white/10 bg-[#0A0D12]'
+    >
+      <div className='relative aspect-square bg-[#181D27]'>
+        {post.imageUrl ? (
+          <Image
+            src={post.imageUrl}
+            alt={post.caption || 'Sociality post'}
+            fill
+            unoptimized
+            sizes='(max-width: 640px) 50vw, 240px'
+            className='object-cover transition-transform duration-300 group-hover:scale-105'
+          />
+        ) : (
+          <div className='flex h-full items-center justify-center p-4 text-center text-xs text-[#A4A7AE]'>
+            {post.caption || 'Post'}
+          </div>
+        )}
+      </div>
 
-  const [avatar, setAvatar] = useState<File | null>(null);
-  const [avatarError, setAvatarError] = useState('');
-  const [serverError, setServerError] = useState('');
+      <div className='flex gap-4 p-3 text-xs text-[#A4A7AE]'>
+        <span className='inline-flex items-center gap-1'>
+          <Heart className='size-4' />
+          {post.likesCount}
+        </span>
+        <span>{post.commentsCount} comments</span>
+      </div>
+    </Link>
+  );
+}
+
+export default function MyProfilePage() {
+  const [tab, setTab] = useState<Tab>('posts');
 
   const profileQuery = useQuery({
     queryKey: ['my-profile'],
     queryFn: getMyProfile,
   });
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: '',
-      username: '',
-      phone: '',
-      bio: '',
-    },
+  const postsQuery = useInfiniteQuery({
+    queryKey: ['my-post-list', tab],
+    enabled: tab === 'posts' || tab === 'likes' || tab === 'saved',
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      getMyPostList(
+        tab === 'likes' || tab === 'saved' ? tab : 'posts',
+        pageParam,
+        PAGE_SIZE
+      ),
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.hasNextPage ? pages.length + 1 : undefined,
   });
 
-  useEffect(() => {
-    if (!profileQuery.data) return;
-
-    reset({
-      name: profileQuery.data.name,
-      username: profileQuery.data.username,
-      phone: profileQuery.data.phone,
-      bio: profileQuery.data.bio,
-    });
-  }, [profileQuery.data, reset]);
-
-  const mutation = useMutation({
-    mutationFn: updateMyProfile,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ['my-profile'],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['me'],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['public-profile'],
-        }),
-      ]);
-
-      router.replace('/me');
-    },
-    onError: (error) => {
-      setServerError(getApiErrorMessage(error));
-    },
+  const peopleQuery = useInfiniteQuery({
+    queryKey: ['my-people', tab],
+    enabled: tab === 'followers' || tab === 'following',
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      tab === 'followers'
+        ? getMyFollowers(pageParam, PAGE_SIZE)
+        : getMyFollowing(pageParam, PAGE_SIZE),
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.hasNextPage ? pages.length + 1 : undefined,
   });
 
-  function onSubmit(values: FormValues) {
-    setServerError('');
-    setAvatarError('');
+  const isPeopleTab = tab === 'followers' || tab === 'following';
 
-    mutation.mutate({
-      ...values,
-      avatar,
-    });
-  }
+  const activeQuery = isPeopleTab ? peopleQuery : postsQuery;
+
+  const posts = Array.from(
+    new Map(
+      (postsQuery.data?.pages.flatMap((page) => page.items) ?? []).map(
+        (post) => [post.id, post]
+      )
+    ).values()
+  );
+
+  const people = Array.from(
+    new Map(
+      (peopleQuery.data?.pages.flatMap((page) => page.users) ?? []).map(
+        (user) => [user.username, user]
+      )
+    ).values()
+  );
+
+  const profile = profileQuery.data;
 
   return (
     <main className='min-h-screen bg-black px-4 py-8 text-white'>
-      <div className='mx-auto max-w-[620px]'>
+      <div className='mx-auto max-w-[760px]'>
         <Link
-          href='/me'
+          href='/feed'
           className='mb-7 inline-flex items-center gap-2 text-sm text-[#A4A7AE] hover:text-white'
         >
           <ArrowLeft className='size-4' />
-          My Profile
+          Timeline
         </Link>
 
-        <h1 className='text-2xl font-semibold'>Edit Profile</h1>
-
-        <p className='mt-2 text-sm text-[#A4A7AE]'>
-          Update your Sociality account information.
-        </p>
-
         {profileQuery.isPending ? (
-          <p role='status' className='mt-8 text-sm text-[#A4A7AE]'>
+          <p
+            role='status'
+            className='flex items-center gap-2 text-sm text-[#A4A7AE]'
+          >
+            <LoaderCircle className='size-4 animate-spin' />
             Loading your profile...
           </p>
         ) : profileQuery.isError ? (
-          <div
-            role='alert'
-            className='mt-8 rounded-xl border border-white/10 p-5'
-          >
+          <div role='alert' className='rounded-xl border border-white/10 p-5'>
             <p>{getApiErrorMessage(profileQuery.error)}</p>
             <button
               type='button'
               onClick={() => void profileQuery.refetch()}
-              className='mt-3 text-[#A989FF]'
+              className='mt-3 text-sm text-[#A989FF]'
             >
               Retry
             </button>
           </div>
-        ) : (
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className='mt-7 space-y-5 rounded-2xl border border-white/10 bg-[#0A0D12] p-5 sm:p-7'
-          >
-            {serverError && (
-              <p role='alert' className='text-sm text-rose-400'>
-                {serverError}
-              </p>
-            )}
+        ) : profile ? (
+          <>
+            <section className='rounded-2xl border border-white/10 bg-[#0A0D12] p-6'>
+              <div className='flex flex-col gap-5 sm:flex-row sm:items-center'>
+                <div className='relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#6936F2]/30 text-2xl font-semibold'>
+                  {profile.avatarUrl ? (
+                    <Image
+                      src={profile.avatarUrl}
+                      alt={profile.name}
+                      fill
+                      unoptimized
+                      sizes='80px'
+                      className='object-cover'
+                    />
+                  ) : (
+                    profile.name.charAt(0).toUpperCase() || '?'
+                  )}
+                </div>
 
-            <div>
-              <label
-                htmlFor='edit-name'
-                className='mb-2 block text-sm font-medium'
-              >
-                Full Name
-              </label>
-              <input
-                id='edit-name'
-                {...register('name')}
-                className='h-11 w-full rounded-xl border border-white/10 bg-[#181D27] px-4 text-sm outline-none focus:border-[#6936F2]'
-              />
-              {errors.name && (
-                <p className='mt-1 text-xs text-rose-400'>
-                  {errors.name.message}
-                </p>
-              )}
-            </div>
+                <div className='min-w-0 flex-1'>
+                  <h1 className='text-2xl font-semibold'>{profile.name}</h1>
+                  <p className='mt-1 text-sm text-[#A4A7AE]'>
+                    @{profile.username}
+                  </p>
 
-            <div>
-              <label
-                htmlFor='edit-username'
-                className='mb-2 block text-sm font-medium'
-              >
-                Username
-              </label>
-              <input
-                id='edit-username'
-                {...register('username')}
-                className='h-11 w-full rounded-xl border border-white/10 bg-[#181D27] px-4 text-sm outline-none focus:border-[#6936F2]'
-              />
-              {errors.username && (
-                <p className='mt-1 text-xs text-rose-400'>
-                  {errors.username.message}
-                </p>
-              )}
-            </div>
+                  {profile.bio && (
+                    <p className='mt-3 whitespace-pre-wrap text-sm leading-6 text-[#D5D7DA]'>
+                      {profile.bio}
+                    </p>
+                  )}
 
-            <div>
-              <label
-                htmlFor='edit-phone'
-                className='mb-2 block text-sm font-medium'
-              >
-                Phone
-              </label>
-              <input
-                id='edit-phone'
-                type='tel'
-                {...register('phone')}
-                className='h-11 w-full rounded-xl border border-white/10 bg-[#181D27] px-4 text-sm outline-none focus:border-[#6936F2]'
-              />
-              {errors.phone && (
-                <p className='mt-1 text-xs text-rose-400'>
-                  {errors.phone.message}
-                </p>
-              )}
-            </div>
+                  <p className='mt-3 text-xs text-[#717680]'>{profile.email}</p>
+                </div>
 
-            <div>
-              <label
-                htmlFor='edit-bio'
-                className='mb-2 block text-sm font-medium'
-              >
-                Bio
-              </label>
-              <textarea
-                id='edit-bio'
-                rows={4}
-                {...register('bio')}
-                className='w-full resize-y rounded-xl border border-white/10 bg-[#181D27] px-4 py-3 text-sm outline-none focus:border-[#6936F2]'
-              />
-              {errors.bio && (
-                <p className='mt-1 text-xs text-rose-400'>
-                  {errors.bio.message}
-                </p>
-              )}
-            </div>
+                <Link
+                  href='/me/edit'
+                  className='inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-5 py-3 text-xs font-semibold hover:bg-white/10'
+                >
+                  <Pencil className='size-4' />
+                  Edit Profile
+                </Link>
+              </div>
+            </section>
 
-            <div>
-              <label
-                htmlFor='edit-avatar'
-                className='mb-2 block text-sm font-medium'
-              >
-                Profile Photo
-              </label>
-              <input
-                id='edit-avatar'
-                type='file'
-                accept='image/jpeg,image/png,image/webp'
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
+            <nav
+              aria-label='My profile sections'
+              className='mt-6 flex gap-1 overflow-x-auto border-b border-white/10'
+            >
+              {(
+                [
+                  ['posts', 'My Posts'],
+                  ['likes', 'Likes'],
+                  ['saved', 'Saved'],
+                  ['followers', 'Followers'],
+                  ['following', 'Following'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type='button'
+                  onClick={() => setTab(value)}
+                  aria-current={tab === value ? 'page' : undefined}
+                  className={`shrink-0 border-b-2 px-3 py-4 text-xs font-semibold ${
+                    tab === value
+                      ? 'border-[#6936F2] text-white'
+                      : 'border-transparent text-[#A4A7AE] hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
 
-                  setAvatarError('');
-
-                  if (
-                    file &&
-                    !['image/jpeg', 'image/png', 'image/webp'].includes(
-                      file.type
-                    )
-                  ) {
-                    setAvatar(null);
-                    setAvatarError('Choose JPG, PNG, or WebP.');
-                    return;
-                  }
-
-                  if (file && file.size > 5 * 1024 * 1024) {
-                    setAvatar(null);
-                    setAvatarError('Image must be smaller than 5 MB.');
-                    return;
-                  }
-
-                  setAvatar(file);
-                }}
-                className='block w-full text-xs text-[#A4A7AE] file:mr-4 file:rounded-full file:border-0 file:bg-[#6936F2] file:px-4 file:py-2 file:text-white'
-              />
-
-              {avatarError && (
-                <p role='alert' className='mt-2 text-xs text-rose-400'>
-                  {avatarError}
-                </p>
-              )}
-
-              {avatar && (
-                <p className='mt-2 text-xs text-[#A4A7AE]'>
-                  Selected: {avatar.name}
-                </p>
-              )}
-            </div>
-
-            <div className='flex flex-wrap justify-end gap-3 pt-3'>
-              <Link
-                href='/me'
-                className='inline-flex h-11 items-center rounded-full border border-white/15 px-6 text-sm hover:bg-white/10'
-              >
-                Cancel
-              </Link>
-
-              <button
-                type='submit'
-                disabled={mutation.isPending || Boolean(avatarError)}
-                className='inline-flex h-11 items-center gap-2 rounded-full bg-[#6936F2] px-6 text-sm font-semibold hover:bg-[#7F51F9] disabled:opacity-50'
-              >
-                {mutation.isPending ? (
+            <section className='mt-6'>
+              {activeQuery.isPending ? (
+                <p
+                  role='status'
+                  className='flex items-center gap-2 text-sm text-[#A4A7AE]'
+                >
                   <LoaderCircle className='size-4 animate-spin' />
+                  Loading...
+                </p>
+              ) : activeQuery.isError ? (
+                <div
+                  role='alert'
+                  className='rounded-xl border border-white/10 p-5'
+                >
+                  <p className='text-sm text-rose-400'>
+                    {getApiErrorMessage(activeQuery.error)}
+                  </p>
+                  <button
+                    type='button'
+                    onClick={() => {
+                      if (isPeopleTab) {
+                        void peopleQuery.refetch();
+                      } else {
+                        void postsQuery.refetch();
+                      }
+                    }}
+                    className='mt-3 text-sm text-[#A989FF]'
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : isPeopleTab ? (
+                people.length === 0 ? (
+                  <div className='py-12 text-center text-sm text-[#A4A7AE]'>
+                    <Users className='mx-auto mb-3 size-8' />
+                    No users to display.
+                  </div>
                 ) : (
-                  <Save className='size-4' />
-                )}
-                {mutation.isPending ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </form>
-        )}
+                  <div className='space-y-3'>
+                    {people.map((user) => (
+                      <Link
+                        key={user.username}
+                        href={`/profile/${encodeURIComponent(user.username)}`}
+                        className='flex items-center gap-3 rounded-xl border border-white/10 bg-[#0A0D12] p-4 hover:border-[#6936F2]/40'
+                      >
+                        <div className='relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#6936F2]/30'>
+                          {user.avatarUrl ? (
+                            <Image
+                              src={user.avatarUrl}
+                              alt={user.name}
+                              fill
+                              unoptimized
+                              sizes='40px'
+                              className='object-cover'
+                            />
+                          ) : (
+                            user.name.charAt(0).toUpperCase() || '?'
+                          )}
+                        </div>
+                        <div className='min-w-0'>
+                          <p className='truncate text-sm font-semibold'>
+                            {user.name}
+                          </p>
+                          <p className='truncate text-xs text-[#A4A7AE]'>
+                            @{user.username}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )
+              ) : posts.length === 0 ? (
+                <div className='rounded-xl border border-white/10 bg-[#0A0D12] py-12 text-center text-sm text-[#A4A7AE]'>
+                  No {tab} to display.
+                </div>
+              ) : (
+                <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+                  {posts.map((post) => (
+                    <PostTile key={post.id} post={post} />
+                  ))}
+                </div>
+              )}
+
+              {activeQuery.hasNextPage && (
+                <button
+                  type='button'
+                  disabled={activeQuery.isFetchingNextPage}
+                  onClick={() => {
+                    if (isPeopleTab) {
+                      void peopleQuery.fetchNextPage();
+                    } else {
+                      void postsQuery.fetchNextPage();
+                    }
+                  }}
+                  className='mt-6 w-full rounded-full border border-white/15 py-3 text-sm font-semibold hover:bg-white/10 disabled:opacity-50'
+                >
+                  {activeQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
+                </button>
+              )}
+            </section>
+          </>
+        ) : null}
       </div>
     </main>
   );
