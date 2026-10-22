@@ -6,6 +6,7 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
+  type FormEvent,
 } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -30,13 +31,21 @@ const MAX_CAPTION_LENGTH = 2000;
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+type SelectedImage = {
+  file: File;
+  previewUrl: string;
+};
+
 export default function CreatePostPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [image, setImage] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(
+    null
+  );
   const [caption, setCaption] = useState('');
   const [imageError, setImageError] = useState('');
   const [captionError, setCaptionError] = useState('');
@@ -44,34 +53,31 @@ export default function CreatePostPage() {
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
-    if (!image) {
-      return;
-    }
-
-    const url = URL.createObjectURL(image);
-    setPreviewUrl(url);
-
     return () => {
-      URL.revokeObjectURL(url);
-      setPreviewUrl(null);
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
     };
-  }, [image]);
+  }, []);
 
   const mutation = useMutation({
     mutationFn: createPost,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
         queryKey: ['feed'],
       });
 
       router.replace('/feed');
     },
+
     onError: (error: unknown) => {
       setServerError(getApiErrorMessage(error));
     },
   });
 
-  const validateImage = (file: File): string => {
+  function validateImage(file: File): string {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       return 'Please select a JPG, PNG, or WebP image.';
     }
@@ -85,38 +91,79 @@ export default function CreatePostPage() {
     }
 
     return '';
-  };
+  }
 
-  const selectImage = (file: File | null) => {
+  function clearPreviewUrl() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }
+
+  function selectImage(file: File | null) {
     if (!file || mutation.isPending) {
       return;
     }
 
-    const error = validateImage(file);
+    const validationError = validateImage(file);
 
-    if (error) {
-      setImageError(error);
+    if (validationError) {
+      setImageError(validationError);
       return;
     }
 
-    setImage(file);
+    const nextPreviewUrl = URL.createObjectURL(file);
+    const previousPreviewUrl = previewUrlRef.current;
+
+    previewUrlRef.current = nextPreviewUrl;
+
+    setSelectedImage({
+      file,
+      previewUrl: nextPreviewUrl,
+    });
+
     setImageError('');
     setServerError('');
-  };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (previousPreviewUrl) {
+      URL.revokeObjectURL(previousPreviewUrl);
+    }
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     selectImage(event.target.files?.[0] ?? null);
-    event.target.value = '';
-  };
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.target.value = '';
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDragging(false);
 
-    selectImage(event.dataTransfer.files?.[0] ?? null);
-  };
+    if (mutation.isPending) {
+      return;
+    }
 
-  const handleSubmit = () => {
+    selectImage(event.dataTransfer.files?.[0] ?? null);
+  }
+
+  function removeImage() {
+    if (mutation.isPending) {
+      return;
+    }
+
+    clearPreviewUrl();
+    setSelectedImage(null);
+    setImageError('');
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
     if (mutation.isPending) {
       return;
     }
@@ -125,36 +172,38 @@ export default function CreatePostPage() {
     setCaptionError('');
     setServerError('');
 
-    if (!image) {
+    if (!selectedImage) {
       setImageError('Please upload an image.');
       return;
     }
 
-    const fileError = validateImage(image);
+    const validationError = validateImage(selectedImage.file);
 
-    if (fileError) {
-      setImageError(fileError);
+    if (validationError) {
+      setImageError(validationError);
       return;
     }
 
-    if (!caption.trim()) {
+    const trimmedCaption = caption.trim();
+
+    if (!trimmedCaption) {
       setCaptionError('Please write a caption.');
       return;
     }
 
-    if (caption.trim().length > MAX_CAPTION_LENGTH) {
+    if (trimmedCaption.length > MAX_CAPTION_LENGTH) {
       setCaptionError('Caption is too long.');
       return;
     }
 
     mutation.mutate({
-      image,
-      caption: caption.trim(),
+      image: selectedImage.file,
+      caption: trimmedCaption,
     });
-  };
+  }
 
   const canSubmit =
-    image !== null &&
+    selectedImage !== null &&
     caption.trim().length > 0 &&
     caption.trim().length <= MAX_CAPTION_LENGTH &&
     !mutation.isPending;
@@ -167,7 +216,7 @@ export default function CreatePostPage() {
 
           <Link
             href='/feed'
-            className='inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-[#D5D7DA] hover:bg-white/10'
+            className='inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-[#D5D7DA] transition-colors hover:bg-white/10'
           >
             <ArrowLeft className='size-4' />
             Back to Timeline
@@ -176,20 +225,25 @@ export default function CreatePostPage() {
       </header>
 
       <main className='mx-auto w-full max-w-[640px] px-4 py-10 sm:px-5'>
-        <h1 className='text-2xl font-semibold tracking-tight'>Create Post</h1>
+        <div className='mb-7'>
+          <h1 className='text-2xl font-semibold tracking-tight'>Create Post</h1>
 
-        <p className='mt-2 text-sm text-[#A4A7AE]'>
-          Share a moment with your community.
-        </p>
+          <p className='mt-2 text-sm text-[#A4A7AE]'>
+            Share a moment with your community.
+          </p>
+        </div>
 
-        <section className='mt-7 rounded-2xl border border-white/10 bg-[#0A0D12] p-4 sm:p-6'>
+        <form
+          onSubmit={handleSubmit}
+          className='rounded-2xl border border-white/10 bg-[#0A0D12] p-4 sm:p-6'
+        >
           {serverError && (
             <div
               role='alert'
-              className='mb-5 flex gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300'
+              className='mb-5 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs leading-5 text-rose-300'
             >
               <AlertCircle className='size-4 shrink-0' />
-              {serverError}
+              <span>{serverError}</span>
             </div>
           )}
 
@@ -210,11 +264,11 @@ export default function CreatePostPage() {
             className='sr-only'
           />
 
-          {previewUrl ? (
+          {selectedImage ? (
             <div className='relative overflow-hidden rounded-xl border border-white/10 bg-[#181D27]'>
               <div className='relative aspect-[4/3]'>
                 <Image
-                  src={previewUrl}
+                  src={selectedImage.previewUrl}
                   alt='Selected post preview'
                   fill
                   unoptimized
@@ -225,13 +279,10 @@ export default function CreatePostPage() {
 
               <button
                 type='button'
-                onClick={() => {
-                  setImage(null);
-                  setPreviewUrl(null);
-                }}
+                onClick={removeImage}
                 disabled={mutation.isPending}
                 aria-label='Remove selected image'
-                className='absolute top-3 right-3 rounded-full bg-black/75 p-2 text-white'
+                className='absolute top-3 right-3 rounded-full bg-black/75 p-2 text-white transition-colors hover:bg-black disabled:opacity-50'
               >
                 <X className='size-4' />
               </button>
@@ -240,11 +291,14 @@ export default function CreatePostPage() {
             <div
               onDragOver={(event) => {
                 event.preventDefault();
-                setIsDragging(true);
+
+                if (!mutation.isPending) {
+                  setIsDragging(true);
+                }
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              className={`flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center ${
+              className={`flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center transition-colors ${
                 isDragging
                   ? 'border-[#7F51F9] bg-[#6936F2]/10'
                   : 'border-white/20 bg-[#181D27]/40'
@@ -279,15 +333,17 @@ export default function CreatePostPage() {
             </p>
           )}
 
-          {image && (
+          {selectedImage && (
             <div className='mt-3 flex items-center justify-between gap-3'>
-              <p className='truncate text-xs text-[#A4A7AE]'>{image.name}</p>
+              <p className='truncate text-xs text-[#A4A7AE]'>
+                {selectedImage.file.name}
+              </p>
 
               <button
                 type='button'
                 onClick={() => fileInputRef.current?.click()}
                 disabled={mutation.isPending}
-                className='shrink-0 text-xs font-semibold text-[#A989FF] hover:text-white'
+                className='shrink-0 text-xs font-semibold text-[#A989FF] hover:text-white disabled:opacity-50'
               >
                 Change photo
               </button>
@@ -313,7 +369,8 @@ export default function CreatePostPage() {
               rows={5}
               disabled={mutation.isPending}
               placeholder="What's on your mind?"
-              className='w-full resize-y rounded-xl border border-white/10 bg-[#181D27]/40 px-4 py-3 text-sm text-white outline-none placeholder:text-[#717680] focus:border-[#7F51F9]'
+              aria-invalid={Boolean(captionError)}
+              className='w-full resize-y rounded-xl border border-white/10 bg-[#181D27]/40 px-4 py-3 text-sm text-white outline-none placeholder:text-[#717680] focus:border-[#7F51F9] disabled:opacity-60'
             />
 
             <div className='mt-2 flex items-center justify-between gap-3'>
@@ -340,14 +397,14 @@ export default function CreatePostPage() {
                   event.preventDefault();
                 }
               }}
+              aria-disabled={mutation.isPending}
               className='inline-flex h-11 items-center justify-center rounded-full border border-white/15 px-6 text-xs font-semibold hover:bg-white/10'
             >
               Cancel
             </Link>
 
             <Button
-              type='button'
-              onClick={handleSubmit}
+              type='submit'
               disabled={!canSubmit}
               className='h-11 rounded-full bg-[#6936F2] px-7 text-xs font-semibold text-white hover:bg-[#7F51F9] disabled:opacity-50'
             >
@@ -361,7 +418,7 @@ export default function CreatePostPage() {
               )}
             </Button>
           </div>
-        </section>
+        </form>
       </main>
     </div>
   );
