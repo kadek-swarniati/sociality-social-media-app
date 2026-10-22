@@ -204,6 +204,7 @@ export async function createPost({
   caption,
 }: CreatePostPayload): Promise<unknown> {
   const formData = new FormData();
+
   formData.append('image', image);
   formData.append('caption', caption.trim());
 
@@ -240,8 +241,18 @@ export async function createComment(
   postId: number,
   content: string
 ): Promise<unknown> {
+  const text = content.trim();
+
+  if (!Number.isSafeInteger(postId) || postId <= 0) {
+    throw new Error('Invalid post ID.');
+  }
+
+  if (!text) {
+    throw new Error('Comment cannot be empty.');
+  }
+
   const response = await api.post<unknown>(`/posts/${postId}/comments`, {
-    content: content.trim(),
+    text,
   });
 
   return response.data;
