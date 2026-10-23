@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/auth-provider';
 
 export default function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const { isAuthenticated, isInitializing } = useAuth();
 
@@ -17,11 +16,12 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
       return;
     }
 
-    const query = searchParams.toString();
-    const returnTo = query ? `${pathname}?${query}` : pathname;
+    const query = typeof window !== 'undefined' ? window.location.search : '';
+
+    const returnTo = `${pathname}${query}`;
 
     router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
-  }, [isAuthenticated, isInitializing, pathname, router, searchParams]);
+  }, [isAuthenticated, isInitializing, pathname, router]);
 
   if (isInitializing || !isAuthenticated) {
     return (
