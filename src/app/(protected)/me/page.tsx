@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -13,8 +12,8 @@ import {
 } from '@/lib/api/account';
 import { getMyFollowers, getMyFollowing } from '@/lib/api/users';
 import { getApiErrorMessage } from '@/lib/api/client';
-
-type Tab = 'posts' | 'likes' | 'saved' | 'followers' | 'following';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setActiveProfileTab, type ProfileTab } from '@/store/ui-slice';
 
 const PAGE_SIZE = 12;
 
@@ -53,7 +52,13 @@ function PostTile({ post }: { post: AccountPost }) {
 }
 
 export default function MyProfilePage() {
-  const [tab, setTab] = useState<Tab>('posts');
+  const dispatch = useAppDispatch();
+
+  const tab = useAppSelector((state) => state.ui.activeProfileTab);
+
+  const setTab = (value: ProfileTab) => {
+    dispatch(setActiveProfileTab(value));
+  };
 
   const profileQuery = useQuery({
     queryKey: ['my-profile'],

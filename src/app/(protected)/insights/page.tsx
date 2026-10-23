@@ -7,7 +7,6 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
-  ChevronDown,
   Compass,
   Database,
   Heart,
@@ -22,6 +21,9 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { OpportunityRadar } from '@/components/insights/opportunity-radar';
+import { CreatorIntelligenceSuite } from '@/components/insights/creator-intelligence-suite';
+import { FairComparison } from '@/components/insights/fair-comparison';
 import { getMyPostList } from '@/lib/api/account';
 import { api } from '@/lib/api/client';
 
@@ -38,100 +40,20 @@ type Post = {
   comments: number | null;
 };
 
-type Page = {
-  items: Post[];
-  hasNextPage: boolean;
-};
-
 type CompletePost = Post & {
   likes: number;
   comments: number;
   total: number;
 };
 
-type Topic = {
-  id: string;
-  title: string;
-  emoji: string;
-  words: string[];
-  color: string;
+type Page = {
+  items: Post[];
+  hasNextPage: boolean;
 };
 
 const PAGE_SIZE = 12;
 const MAX_PAGES = 20;
 const REFRESH_INTERVAL = 60_000;
-
-const TOPICS: Topic[] = [
-  {
-    id: 'learning',
-    title: 'Learning and tips',
-    emoji: '💡',
-    words: [
-      'learn',
-      'learning',
-      'tips',
-      'tutorial',
-      'study',
-      'how to',
-      'belajar',
-      'cara',
-      'ilmu',
-      'skill',
-    ],
-    color: 'bg-amber-50 border-amber-200',
-  },
-  {
-    id: 'story',
-    title: 'Personal stories',
-    emoji: '🌷',
-    words: [
-      'story',
-      'journey',
-      'today',
-      'experience',
-      'life',
-      'cerita',
-      'pengalaman',
-      'hari ini',
-      'perjalanan',
-    ],
-    color: 'bg-pink-50 border-pink-200',
-  },
-  {
-    id: 'question',
-    title: 'Questions and discussions',
-    emoji: '💬',
-    words: [
-      '?',
-      'what do you think',
-      'thoughts',
-      'opinion',
-      'menurut',
-      'bagaimana',
-      'pendapat',
-      'diskusi',
-    ],
-    color: 'bg-sky-50 border-sky-200',
-  },
-  {
-    id: 'creative',
-    title: 'Creative inspiration',
-    emoji: '🎨',
-    words: [
-      'design',
-      'art',
-      'creative',
-      'photo',
-      'music',
-      'create',
-      'kreatif',
-      'desain',
-      'foto',
-      'karya',
-    ],
-    color: 'bg-violet-50 border-violet-200',
-  },
-];
 
 const CHALLENGES = [
   {
@@ -139,20 +61,26 @@ const CHALLENGES = [
     emoji: '⚡',
     title: 'The Hook Remix',
     text: 'Try a new opening sentence for your next post.',
+    detail:
+      'Write two different opening lines for a similar topic. Publish one and keep the other for a future experiment.',
   },
   {
     id: 'question',
     emoji: '💬',
     title: 'Start a Conversation',
     text: 'Invite your audience to share a genuine thought.',
+    detail:
+      'End your next post with an open question. Later, compare recorded comments with a similar post.',
   },
   {
     id: 'story',
     emoji: '🌷',
     title: 'Tell a Tiny Story',
     text: 'Share one meaningful moment from your day.',
+    detail:
+      'Describe a real experience, what you learned, and why it matters to you.',
   },
-];
+] as const;
 
 function objectOf(value: unknown): JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -272,8 +200,12 @@ async function fetchPosts(mode: Mode, page: number): Promise<Page> {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 1,
+    maximumFractionDigits: 2,
   }).format(value);
+}
+
+function formatMaybe(value: number | null): string {
+  return value === null ? 'Not available' : formatNumber(value);
 }
 
 function postLabel(post: Post): string {
@@ -285,7 +217,7 @@ function postLabel(post: Post): string {
 }
 
 function median(values: number[]): number | null {
-  if (!values.length) return null;
+  if (values.length === 0) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
@@ -296,10 +228,10 @@ function median(values: number[]): number | null {
 }
 
 function gini(values: number[]): number | null {
-  if (!values.length) return null;
+  if (values.length === 0) return null;
 
   const sorted = [...values].sort((a, b) => a - b);
-  const sum = sorted.reduce((a, b) => a + b, 0);
+  const sum = sorted.reduce((total, value) => total + value, 0);
 
   if (sum === 0) return null;
 
@@ -313,52 +245,35 @@ function gini(values: number[]): number | null {
   );
 }
 
-function topicFor(caption: string): Topic | null {
-  const text = caption.toLowerCase();
-
-  return (
-    TOPICS.find((topic) =>
-      topic.words.some((word) => {
-        if (word === '?') return text.includes('?');
-
-        const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-        return new RegExp(
-          `(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`,
-          'u'
-        ).test(text);
-      })
-    ) ?? null
-  );
-}
-
 function Panel({
   title,
   description,
   children,
   action,
+  id,
 }: {
   title: string;
   description: string;
   children: ReactNode;
   action?: ReactNode;
+  id?: string;
 }) {
   return (
-    <section className='rounded-[26px] border border-[#E9E5F4] bg-white p-5 text-[#25213B] shadow-sm sm:p-7'>
+    <section
+      id={id}
+      className='rounded-[26px] border border-[#E9E5F4] bg-white p-5 text-[#25213B] shadow-sm sm:p-7'
+    >
       <div className='mb-5 flex flex-wrap items-start justify-between gap-3'>
         <div>
           <h2 className='text-xl font-bold tracking-tight sm:text-2xl'>
             {title}
           </h2>
-
           <p className='mt-2 max-w-2xl text-sm leading-6 text-[#6B657C]'>
             {description}
           </p>
         </div>
-
         {action}
       </div>
-
       {children}
     </section>
   );
@@ -382,13 +297,10 @@ function Metric({
       <span className='text-2xl' aria-hidden='true'>
         {emoji}
       </span>
-
       <p className='mt-3 text-sm font-semibold text-[#5D5572]'>{label}</p>
-
       <p className='mt-1 text-3xl font-black tracking-tight text-[#211A39]'>
         {value}
       </p>
-
       <p className='mt-2 text-xs leading-5 text-[#6B657C]'>{description}</p>
     </div>
   );
@@ -414,12 +326,10 @@ function PostCard({
           : 'border-[#EBE7F3] bg-white hover:bg-[#FAF8FF]'
       }`}
     >
-      <p className='line-clamp-2 text-sm font-semibold leading-6 text-[#25213B]'>
+      <p className='line-clamp-2 break-words text-sm font-semibold leading-6'>
         {postLabel(post)}
       </p>
-
       <p className='mt-1 text-xs text-[#736C82]'>By {post.author}</p>
-
       <div className='mt-3 flex flex-wrap gap-3 text-xs font-semibold text-[#51466E]'>
         <span>💜 {post.likes} likes</span>
         <span>💬 {post.comments} comments</span>
@@ -466,7 +376,7 @@ function BubbleChart({
     return [...map.values()].sort((a, b) => b.posts.length - a.posts.length);
   }, [posts]);
 
-  if (!posts.length) {
+  if (posts.length === 0) {
     return <p className='text-sm text-[#6B657C]'>No posts to visualize yet.</p>;
   }
 
@@ -476,9 +386,7 @@ function BubbleChart({
   const plotHeight = 245;
 
   const maxLikes = Math.max(1, ...posts.map((post) => post.likes));
-
   const maxComments = Math.max(1, ...posts.map((post) => post.comments));
-
   const maxGroup = Math.max(1, ...groups.map((group) => group.posts.length));
 
   const x = (value: number) => left + (value / maxLikes) * plotWidth;
@@ -504,7 +412,6 @@ function BubbleChart({
                 y2={y(maxComments * fraction)}
                 stroke='#E5E0EF'
               />
-
               <text
                 x={left - 10}
                 y={y(maxComments * fraction) + 4}
@@ -514,7 +421,6 @@ function BubbleChart({
               >
                 {formatNumber(maxComments * fraction)}
               </text>
-
               <text
                 x={x(maxLikes * fraction)}
                 y={top + plotHeight + 20}
@@ -605,9 +511,9 @@ function BubbleChart({
 function LorenzCurve({ posts }: { posts: CompletePost[] }) {
   const values = posts.map((post) => post.total).sort((a, b) => a - b);
 
-  const sum = values.reduce((a, b) => a + b, 0);
+  const sum = values.reduce((total, value) => total + value, 0);
 
-  if (!values.length || sum === 0) {
+  if (values.length === 0 || sum === 0) {
     return (
       <p className='text-sm text-[#6B657C]'>
         Not enough recorded interactions to draw this curve.
@@ -685,10 +591,6 @@ export default function InsightsPage() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const [compareA, setCompareA] = useState('');
-
-  const [compareB, setCompareB] = useState('');
-
   const [showWhy, setShowWhy] = useState(false);
 
   const [activeChallenge, setActiveChallenge] = useState<string | null>(null);
@@ -753,22 +655,9 @@ export default function InsightsPage() {
       .slice(0, topCount)
       .reduce((sum, post) => sum + post.total, 0);
 
-    const topics = TOPICS.map((topic) => {
-      const matches = posts.filter(
-        (post) => topicFor(post.caption)?.id === topic.id
-      );
-
-      return {
-        ...topic,
-        matches,
-        medianInteractions: median(matches.map((post) => post.total)),
-      };
-    });
-
     return {
       posts,
       ranked,
-      topics,
       likes,
       comments,
       total,
@@ -799,10 +688,6 @@ export default function InsightsPage() {
 
   const selected = analysis.posts.find((post) => post.id === selectedId);
 
-  const first = analysis.posts.find((post) => String(post.id) === compareA);
-
-  const second = analysis.posts.find((post) => String(post.id) === compareB);
-
   const filtered = analysis.posts
     .filter((post) =>
       `${post.caption} ${post.author}`
@@ -810,10 +695,6 @@ export default function InsightsPage() {
         .includes(search.trim().toLowerCase())
     )
     .sort((a, b) => b[sortBy] - a[sortBy] || a.id - b.id);
-
-  const activeTopics = analysis.topics.filter(
-    (topic) => topic.matches.length > 0
-  );
 
   const evidenceStatus =
     smallSample || partial || analysis.missing > 0
@@ -831,13 +712,21 @@ export default function InsightsPage() {
 
   const changeTab = (next: Tab) => {
     setTab(next);
-    setSelectedId(null);
   };
+
+  const selectRadarPost = (id: number) => {
+    setSelectedId(id);
+  };
+
+  const missingPercent =
+    analysis.uniqueCount > 0
+      ? (analysis.missing / analysis.uniqueCount) * 100
+      : null;
 
   return (
     <main className='min-h-screen bg-[#F8F6FF] px-4 py-6 text-[#25213B] sm:px-6 lg:px-8'>
       <div className='mx-auto max-w-7xl space-y-6'>
-        {/* LIVE DATA CONTROLS */}
+        {/* Live data controls */}
 
         <div className='flex flex-wrap items-center justify-between gap-3'>
           <Link
@@ -861,12 +750,14 @@ export default function InsightsPage() {
                     ? 'bg-amber-400 motion-safe:animate-pulse'
                     : query.isError
                       ? 'bg-red-500'
-                      : 'bg-emerald-500'
+                      : query.data
+                        ? 'bg-emerald-500'
+                        : 'bg-slate-400'
                 }`}
               />
 
               <div>
-                <p className='text-xs font-bold text-[#25213B]'>
+                <p className='text-xs font-bold'>
                   {query.isFetching
                     ? 'Checking for updates'
                     : query.isError
@@ -890,7 +781,6 @@ export default function InsightsPage() {
                   onChange={(event) => setAutoRefresh(event.target.checked)}
                   className='h-4 w-4 accent-[#6936F2]'
                 />
-
                 <span className='text-xs font-semibold text-[#51466E]'>
                   Auto refresh
                 </span>
@@ -899,21 +789,20 @@ export default function InsightsPage() {
 
             <button
               type='button'
-              onClick={() => query.refetch()}
+              onClick={() => void query.refetch()}
               disabled={query.isFetching}
-              className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#5526D7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6936F2] disabled:opacity-60'
+              className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#5526D7] disabled:opacity-60'
             >
               <RefreshCw
                 size={16}
                 className={query.isFetching ? 'motion-safe:animate-spin' : ''}
               />
-
               {query.isFetching ? 'Refreshing...' : 'Refresh insights'}
             </button>
           </div>
         </div>
 
-        {/* WELCOME */}
+        {/* Welcome */}
 
         <header className='relative overflow-hidden rounded-[30px] bg-[#6936F2] p-6 text-white sm:p-9'>
           <div className='pointer-events-none absolute -right-12 -top-16 h-52 w-52 rounded-full bg-white/10' />
@@ -928,17 +817,17 @@ export default function InsightsPage() {
               Hey, content creator! 👋
             </h1>
 
-            <p className='mt-3 text-xl font-semibold text-white sm:text-2xl'>
+            <p className='mt-3 text-xl font-semibold sm:text-2xl'>
               This page is designed just for you.
             </p>
 
             <p className='mt-4 max-w-2xl text-sm leading-7 text-[#F0E9FF] sm:text-base'>
-              Ever wondered what makes people connect with a post? Discover
-              fresh inspiration, explore what your audience responds to, and
-              find creative ideas to try next.
+              Find inspiration from real Sociality posts, understand what people
+              respond to, compare your content thoughtfully, and discover
+              something creative to try next.
             </p>
 
-            <p className='mt-3 text-sm font-semibold text-white'>
+            <p className='mt-3 text-sm font-semibold'>
               No complicated statistics needed. Just helpful insights and a
               little creative magic. ✨
             </p>
@@ -961,7 +850,7 @@ export default function InsightsPage() {
           </div>
         </header>
 
-        {/* NAVIGATION */}
+        {/* Navigation */}
 
         <nav
           aria-label='Creator Playground sections'
@@ -991,12 +880,11 @@ export default function InsightsPage() {
           ))}
         </nav>
 
-        {/* DATA SOURCE */}
+        {/* Data source */}
 
         <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E9E5F4] bg-white p-4'>
           <div>
             <p className='text-sm font-bold'>Whose posts are we exploring?</p>
-
             <p className='mt-1 text-xs text-[#736C82]'>
               Switch between your own creations and the Sociality community.
             </p>
@@ -1015,8 +903,7 @@ export default function InsightsPage() {
                 onClick={() => {
                   setMode(value);
                   setSelectedId(null);
-                  setCompareA('');
-                  setCompareB('');
+
                   setSearch('');
                 }}
                 aria-pressed={mode === value}
@@ -1032,8 +919,6 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        {/* LOADING */}
-
         {query.isPending && (
           <div className='flex items-center justify-center gap-3 rounded-2xl bg-white p-12 text-[#51466E]'>
             <LoaderCircle className='motion-safe:animate-spin' />
@@ -1041,15 +926,12 @@ export default function InsightsPage() {
           </div>
         )}
 
-        {/* ERROR */}
-
         {query.isError && (
           <div
             role='alert'
             className='rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900'
           >
             <p className='font-bold'>We could not refresh your insights.</p>
-
             <p className='mt-2 text-sm'>
               {query.error instanceof Error
                 ? query.error.message
@@ -1064,7 +946,7 @@ export default function InsightsPage() {
 
             <button
               type='button'
-              onClick={() => query.refetch()}
+              onClick={() => void query.refetch()}
               className='mt-4 rounded-xl bg-red-700 px-4 py-2 text-sm font-bold text-white'
             >
               Try again
@@ -1074,7 +956,7 @@ export default function InsightsPage() {
 
         {query.data && (
           <>
-            {/* DATA COVERAGE */}
+            {/* Data coverage */}
 
             <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E4DCF8] bg-[#F0EAFF] p-4'>
               <div className='flex items-start gap-3'>
@@ -1109,7 +991,7 @@ export default function InsightsPage() {
               </button>
             </div>
 
-            {/* SUMMARY METRICS */}
+            {/* Summary metrics */}
 
             <section
               aria-label='Your creator numbers'
@@ -1148,75 +1030,18 @@ export default function InsightsPage() {
               />
             </section>
 
-            {/* DISCOVER */}
+            {/* Discover */}
 
             {tab === 'discover' && (
               <div className='space-y-6'>
-                <Panel
-                  title='Your Creator Opportunity Radar 🔭'
-                  description="Let's discover content themes worth exploring. These are clues from loaded captions, not predictions of what will go viral."
-                >
-                  {activeTopics.length === 0 ? (
-                    <div className='rounded-2xl bg-[#F8F6FF] p-6'>
-                      <p className='font-bold'>
-                        No clear themes detected yet 🌱
-                      </p>
-
-                      <p className='mt-2 text-sm leading-6 text-[#655B78]'>
-                        Your loaded captions do not match our simple theme
-                        keywords. Explore more community posts to discover new
-                        inspiration.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className='grid gap-4 md:grid-cols-2'>
-                      {activeTopics.map((topic) => (
-                        <div
-                          key={topic.id}
-                          className={`rounded-[22px] border p-5 ${topic.color}`}
-                        >
-                          <div className='flex items-start justify-between gap-3'>
-                            <span className='text-3xl' aria-hidden='true'>
-                              {topic.emoji}
-                            </span>
-
-                            <span className='rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-[#51466E]'>
-                              {topic.matches.length} matching posts
-                            </span>
-                          </div>
-
-                          <h3 className='mt-4 text-lg font-black'>
-                            {topic.title}
-                          </h3>
-
-                          <p className='mt-2 text-sm leading-6 text-[#655B78]'>
-                            {topic.medianInteractions === null
-                              ? 'No complete interaction counts available.'
-                              : `Median recorded interactions: ${formatNumber(topic.medianInteractions)} per matching post.`}
-                          </p>
-
-                          <p className='mt-2 text-xs leading-5 text-[#736C82]'>
-                            Themes are identified using caption keywords. Some
-                            posts may be classified incorrectly.
-                          </p>
-
-                          <button
-                            type='button'
-                            onClick={() =>
-                              setSelectedId(topic.matches[0]?.id ?? null)
-                            }
-                            className='mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#6936F2]'
-                          >
-                            Explore an example
-                            <ArrowRight size={16} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Panel>
+                <OpportunityRadar
+                  posts={analysis.posts}
+                  partialCoverage={partial}
+                  onSelectPost={selectRadarPost}
+                />
 
                 <Panel
+                  id='creator-post-explorer'
                   title='Explore what catches attention ✨'
                   description='Discover posts with the most recorded likes or comments in the data you have loaded.'
                 >
@@ -1248,6 +1073,7 @@ export default function InsightsPage() {
                     <Search size={18} className='text-[#736C82]' />
 
                     <input
+                      type='search'
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder='Search captions or creators'
@@ -1255,6 +1081,23 @@ export default function InsightsPage() {
                       className='min-w-0 flex-1 bg-transparent text-sm text-[#25213B] outline-none placeholder:text-[#90889D]'
                     />
                   </label>
+
+                  {selected && (
+                    <div
+                      role='status'
+                      className='mb-4 rounded-xl border border-[#CDBBF8] bg-[#F3EEFF] p-4'
+                    >
+                      <p className='text-xs font-bold text-[#6936F2]'>
+                        Selected post
+                      </p>
+                      <p className='mt-1 break-words text-sm font-semibold'>
+                        {postLabel(selected)}
+                      </p>
+                      <p className='mt-2 text-xs text-[#51466E]'>
+                        {selected.likes} likes, {selected.comments} comments
+                      </p>
+                    </div>
+                  )}
 
                   <div className='grid gap-3 md:grid-cols-2'>
                     {filtered.slice(0, 8).map((post) => (
@@ -1292,106 +1135,14 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {/* IMPROVE */}
+            {/* Improve */}
 
             {tab === 'improve' && (
               <div className='space-y-6'>
-                <Panel
-                  title='Fair Comparison Studio ⚖️'
-                  description="Choose two posts. We'll compare what is recorded and explain what we cannot know."
-                >
-                  <div className='grid gap-4 md:grid-cols-2'>
-                    {(
-                      [
-                        ['Post A', compareA, setCompareA],
-                        ['Post B', compareB, setCompareB],
-                      ] as const
-                    ).map(([title, value, setter]) => (
-                      <label key={title} className='block'>
-                        <span className='mb-2 block text-sm font-bold'>
-                          {title}
-                        </span>
-
-                        <select
-                          value={value}
-                          onChange={(event) => setter(event.target.value)}
-                          className='w-full rounded-xl border border-[#DDD5F4] bg-white p-3 text-sm text-[#25213B] focus:outline-[#6936F2]'
-                        >
-                          <option value=''>Choose a post</option>
-
-                          {analysis.posts.map((post) => (
-                            <option key={post.id} value={String(post.id)}>
-                              {postLabel(post)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ))}
-                  </div>
-
-                  {first && second && first.id !== second.id ? (
-                    <div className='mt-6 space-y-4'>
-                      <div className='grid gap-4 sm:grid-cols-2'>
-                        {[first, second].map((post, index) => (
-                          <div
-                            key={post.id}
-                            className={`rounded-2xl p-5 ${
-                              index === 0 ? 'bg-[#EEE8FF]' : 'bg-[#E5F7F6]'
-                            }`}
-                          >
-                            <p className='text-xs font-bold uppercase tracking-wider'>
-                              Post {index === 0 ? 'A' : 'B'}
-                            </p>
-
-                            <p className='mt-2 line-clamp-2 text-sm font-semibold'>
-                              {postLabel(post)}
-                            </p>
-
-                            <p className='mt-4 text-4xl font-black'>
-                              {post.total}
-                            </p>
-
-                            <p className='text-xs text-[#655B78]'>
-                              Recorded interactions
-                            </p>
-
-                            <p className='mt-3 text-xs'>
-                              {post.likes} likes and {post.comments} comments
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className='rounded-2xl border border-amber-200 bg-amber-50 p-5'>
-                        <p className='flex items-center gap-2 font-bold text-amber-950'>
-                          <ShieldCheck size={18} />
-                          Is this a fair comparison?
-                        </p>
-
-                        <p className='mt-3 text-sm leading-7 text-amber-900'>
-                          {first.total === second.total
-                            ? 'These posts have the same number of recorded interactions.'
-                            : `${
-                                first.total > second.total ? 'Post A' : 'Post B'
-                              } has ${Math.abs(first.total - second.total)} more recorded interactions.`}{' '}
-                          We cannot conclude that one performed better because
-                          exposure, audience size, and posting age are not
-                          available for adjustment.
-                        </p>
-
-                        <p className='mt-2 text-xs leading-5 text-amber-900'>
-                          Fairness status: insufficient information for a fully
-                          adjusted comparison.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className='mt-5 rounded-2xl bg-[#F8F6FF] p-5 text-sm text-[#655B78]'>
-                      Choose two different posts to compare their recorded
-                      interactions.
-                    </div>
-                  )}
-                </Panel>
+                <FairComparison
+                    posts={analysis.posts}
+                    partialCoverage={partial}
+                  />
 
                 <Panel
                   title='Your Next Move 💡'
@@ -1418,9 +1169,9 @@ export default function InsightsPage() {
                         for a similar audience.
                       </p>
 
-                      <p className='mt-3 text-xs text-[#655B78]'>
-                        Why try this? It is a testable content idea. The current
-                        data cannot prove that questions cause more comments.
+                      <p className='mt-3 text-xs leading-6 text-[#655B78]'>
+                        This is a testable idea. The current data cannot prove
+                        that questions cause more comments.
                       </p>
                     </div>
 
@@ -1430,18 +1181,18 @@ export default function InsightsPage() {
                       </span>
 
                       <h3 className='mt-3 text-lg font-black'>
-                        Revisit your standout post
+                        Give your next post a fresh opening
                       </h3>
 
                       <p className='mt-2 text-sm leading-7 text-[#51466E]'>
-                        {analysis.ranked[0]
-                          ? `The highest interaction count in this sample is ${analysis.ranked[0].total}. Look at that post's opening line and consider testing a new variation.`
-                          : 'Once you have analyzable posts, revisit one and try a different opening line.'}
+                        Experiment with a personal story, a surprising fact, or
+                        a helpful tip. Keep a note of what you changed and what
+                        you observed.
                       </p>
 
-                      <p className='mt-3 text-xs text-[#655B78]'>
-                        This is an observation about loaded posts, not proof
-                        that a particular format works best.
+                      <p className='mt-3 text-xs leading-6 text-[#655B78]'>
+                        We cannot isolate the effect of an opening line from
+                        these observational records.
                       </p>
                     </div>
                   </div>
@@ -1454,91 +1205,124 @@ export default function InsightsPage() {
                   >
                     <Lightbulb size={17} />
                     Why am I seeing these ideas?
-                    <ChevronDown size={16} />
                   </button>
 
                   {showWhy && (
-                    <div className='mt-4 rounded-2xl border border-[#E4DCF8] bg-[#FBFAFF] p-5 text-sm leading-7 text-[#51466E]'>
-                      These ideas use {analysis.posts.length} posts with
-                      complete counts from the loaded {scope}. We observe
-                      captions, likes, and comments. We do not observe reach,
-                      impressions, audience demographics, or causal effects.
-                      {partial ? ' More pages may still be available.' : ''}
-                      {smallSample
-                        ? ' The sample is small, so findings may be unstable.'
-                        : ''}{' '}
-                      We do not assign a statistical confidence percentage
-                      without a justified estimation method.
+                    <div className='mt-4 rounded-2xl bg-[#F8F6FF] p-5 text-sm leading-7 text-[#51466E]'>
+                      <p>
+                        These are creative experiments suggested by simple
+                        rules. They are not automatically proven
+                        recommendations.
+                      </p>
+
+                      <p className='mt-3'>
+                        The current analysis includes {analysis.posts.length}{' '}
+                        posts with complete interaction counts from the selected
+                        source.
+                      </p>
+
+                      <p className='mt-3'>
+                        We do not have reliable reach, impressions, audience
+                        size, or exposure adjustments. Try one change at a time
+                        and document what happens.
+                      </p>
                     </div>
                   )}
                 </Panel>
 
                 <Panel
-                  title='Creator Challenge Corner 🎯'
-                  description='Pick one creative experiment. The goal is to learn something useful, not chase a random number.'
+                  title='Creator Challenges 🎯'
+                  description='Choose a small creative experiment. Progress stays in this browser session and is not saved to your account.'
                 >
-                  <div className='grid gap-3 md:grid-cols-3'>
-                    {CHALLENGES.map((challenge) => (
-                      <button
-                        key={challenge.id}
-                        type='button'
-                        onClick={() => setActiveChallenge(challenge.id)}
-                        aria-pressed={activeChallenge === challenge.id}
-                        className={`rounded-2xl border p-5 text-left transition-colors ${
-                          activeChallenge === challenge.id
-                            ? 'border-[#6936F2] bg-[#EEE8FF]'
-                            : 'border-[#E9E5F4] bg-white hover:bg-[#FBFAFF]'
-                        }`}
-                      >
-                        <span className='text-3xl' aria-hidden='true'>
-                          {challenge.emoji}
-                        </span>
+                  <div className='grid gap-4 md:grid-cols-3'>
+                    {CHALLENGES.map((challenge) => {
+                      const active = activeChallenge === challenge.id;
 
-                        <p className='mt-3 font-bold'>{challenge.title}</p>
+                      return (
+                        <div
+                          key={challenge.id}
+                          className={`rounded-[22px] border p-5 ${
+                            active
+                              ? 'border-[#6936F2] bg-[#F3EEFF]'
+                              : 'border-[#E9E5F4] bg-[#FBFAFF]'
+                          }`}
+                        >
+                          <span className='text-3xl' aria-hidden='true'>
+                            {challenge.emoji}
+                          </span>
 
-                        <p className='mt-2 text-sm leading-6 text-[#655B78]'>
-                          {challenge.text}
-                        </p>
+                          <h3 className='mt-3 font-black'>{challenge.title}</h3>
 
-                        <p className='mt-4 flex items-center gap-2 text-xs font-bold text-[#6936F2]'>
-                          {activeChallenge === challenge.id ? (
-                            <>
-                              <CheckCircle2 size={15} />
-                              Challenge selected
-                            </>
-                          ) : (
-                            <>
-                              <Target size={15} />
-                              Choose this challenge
-                            </>
+                          <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                            {challenge.text}
+                          </p>
+
+                          {active && (
+                            <p className='mt-3 rounded-xl bg-white p-3 text-xs leading-6 text-[#51466E]'>
+                              {challenge.detail}
+                            </p>
                           )}
-                        </p>
-                      </button>
-                    ))}
+
+                          <button
+                            type='button'
+                            onClick={() =>
+                              setActiveChallenge(active ? null : challenge.id)
+                            }
+                            className={`mt-4 rounded-xl px-4 py-2 text-xs font-bold ${
+                              active
+                                ? 'bg-white text-[#6936F2]'
+                                : 'bg-[#6936F2] text-white'
+                            }`}
+                          >
+                            {active
+                              ? 'Challenge selected'
+                              : 'Try this challenge'}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <p className='mt-4 text-xs leading-6 text-[#736C82]'>
-                    Your selection is kept in this page session. Persistent
-                    challenge tracking will be added in a future step.
+                    These challenges encourage learning, not chasing likes. A
+                    selected challenge is not evidence of improved performance.
                   </p>
                 </Panel>
               </div>
             )}
 
-            {/* ADVANCED */}
+            {/* Data Lab */}
 
             {tab === 'advanced' && (
               <div className='space-y-6'>
+
+                  <CreatorIntelligenceSuite
+                    posts={analysis.posts}
+                    audit={{
+                      rawCount: analysis.rawCount,
+                      uniqueCount: analysis.uniqueCount,
+                      duplicates: analysis.duplicates,
+                      missing: analysis.missing,
+                      pagesLoaded,
+                      partialCoverage: partial,
+                    }}
+                  />
+
                 <Panel
                   title='Data Quality Center 🛡️'
-                  description="Great insights begin with reliable data. Here's what we can check about the posts currently loaded."
+                  description='Know what your insights are based on. We show what was loaded, what could be analyzed, and what still needs checking.'
+                  action={
+                    <span className='rounded-full bg-[#EEE8FF] px-3 py-2 text-xs font-bold text-[#51466E]'>
+                      {partial ? 'Partial coverage' : 'Current pages loaded'}
+                    </span>
+                  }
                 >
                   <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
                     <Metric
                       emoji='📦'
-                      label='Records loaded'
+                      label='Records received'
                       value={formatNumber(analysis.rawCount)}
-                      description='Records returned across loaded pages'
+                      description='Rows returned by loaded API pages'
                       background='bg-[#EEE8FF]'
                     />
 
@@ -1546,20 +1330,20 @@ export default function InsightsPage() {
                       emoji='📝'
                       label='Unique posts'
                       value={formatNumber(analysis.uniqueCount)}
-                      description='Unique post IDs after deduplication'
+                      description='Distinct post IDs'
                       background='bg-[#E5F7F6]'
                     />
 
                     <Metric
-                      emoji='🔍'
-                      label='Repeated records'
+                      emoji='🔁'
+                      label='Duplicate records'
                       value={formatNumber(analysis.duplicates)}
-                      description='Repeated IDs across loaded pages'
+                      description='Repeated IDs excluded from analysis'
                       background='bg-[#FFF2DF]'
                     />
 
                     <Metric
-                      emoji='🧩'
+                      emoji='🔎'
                       label='Incomplete counts'
                       value={formatNumber(analysis.missing)}
                       description='Posts missing valid likes or comments'
@@ -1568,272 +1352,227 @@ export default function InsightsPage() {
                   </div>
 
                   <div className='mt-5 rounded-2xl bg-[#F8F6FF] p-5'>
-                    <h3 className='font-bold'>What does this mean?</h3>
+                    <h3 className='font-black'>How healthy is this dataset?</h3>
 
-                    <p className='mt-2 text-sm leading-7 text-[#655B78]'>
-                      We remove repeated post IDs from the analysis. Posts with
-                      missing interaction counts are excluded from calculations
-                      that need both likes and comments.
+                    <p className='mt-2 text-sm leading-7 text-[#51466E]'>
+                      {analysis.missing === 0
+                        ? 'All unique posts currently loaded have usable interaction counts.'
+                        : `${analysis.missing} unique posts need attention because likes or comments are missing or invalid.`}
                     </p>
 
-                    <p className='mt-3 text-sm leading-7 text-[#655B78]'>
-                      A missing value is not treated as zero. This helps avoid
-                      misleading results.
+                    <p className='mt-3 text-sm leading-7 text-[#51466E]'>
+                      {missingPercent === null
+                        ? 'No unique posts are currently available for a completeness calculation.'
+                        : `${formatNumber(
+                            missingPercent
+                          )}% of unique loaded posts have incomplete interaction counts.`}
+                    </p>
+
+                    <p className='mt-3 text-sm leading-7 text-[#51466E]'>
+                      {partial
+                        ? 'The analysis does not yet include every available page. Loading more posts may change the findings.'
+                        : 'The API currently reports no further page. This does not guarantee that every post on the platform was captured.'}
                     </p>
                   </div>
-                </Panel>
 
-                <Panel
-                  title='Analysis coverage 📚'
-                  description='Understand how much data has been explored and whether more pages may be available.'
-                >
-                  <div className='grid gap-4 sm:grid-cols-3'>
-                    <Metric
-                      emoji='📄'
-                      label='Pages loaded'
-                      value={formatNumber(pagesLoaded)}
-                      description={`Up to ${MAX_PAGES} pages per query`}
-                      background='bg-[#EEE8FF]'
-                    />
-
-                    <Metric
-                      emoji='📊'
-                      label='Analyzed posts'
-                      value={formatNumber(analysis.posts.length)}
-                      description='Posts with complete interaction counts'
-                      background='bg-[#E5F7F6]'
-                    />
-
-                    <Metric
-                      emoji='🔭'
-                      label='Coverage'
-                      value={partial ? 'Partial' : 'No next page'}
-                      description='Based on API pagination metadata'
-                      background='bg-[#FFF2DF]'
-                    />
-                  </div>
-
-                  <p className='mt-5 text-sm leading-7 text-[#655B78]'>
-                    The analysis uses records returned by the Sociality API. It
-                    does not claim to represent every post ever created on the
-                    platform.
-                  </p>
-
-                  {reachedLimit && (
-                    <p className='mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900'>
-                      The analysis reached its configured page limit. Additional
-                      posts may exist beyond this sample.
-                    </p>
-                  )}
-                </Panel>
-
-                <Panel
-                  title='Interaction concentration 📈'
-                  description='Explore whether recorded interactions are spread across posts or concentrated in a smaller number of posts.'
-                >
-                  <div className='grid gap-5 lg:grid-cols-2'>
-                    <div className='rounded-2xl bg-[#F8F6FF] p-5'>
-                      <h3 className='font-bold'>Lorenz Curve</h3>
-
-                      <p className='mt-2 text-sm leading-6 text-[#655B78]'>
-                        This curve shows how recorded interactions are
-                        distributed among the posts we loaded.
-                      </p>
-
-                      <LorenzCurve posts={analysis.posts} />
-                    </div>
-
-                    <div className='space-y-3'>
-                      <Metric
-                        emoji='📊'
-                        label='Median interactions'
-                        value={
-                          analysis.median === null
-                            ? 'N/A'
-                            : formatNumber(analysis.median)
-                        }
-                        description='The middle interaction count across analyzed posts'
-                        background='bg-[#EEE8FF]'
-                      />
-
-                      <Metric
-                        emoji='📐'
-                        label='Gini coefficient'
-                        value={
-                          analysis.gini === null
-                            ? 'N/A'
-                            : analysis.gini.toFixed(3)
-                        }
-                        description='Describes inequality in recorded interactions'
-                        background='bg-[#E5F7F6]'
-                      />
-
-                      <Metric
-                        emoji='🔬'
-                        label='HHI'
-                        value={
-                          analysis.hhi === null
-                            ? 'N/A'
-                            : analysis.hhi.toFixed(3)
-                        }
-                        description='Sum of squared interaction shares'
-                        background='bg-[#FFF2DF]'
-                      />
-
-                      <Metric
-                        emoji='🌟'
-                        label='Top 10% share'
-                        value={
-                          analysis.topShare === null
-                            ? 'N/A'
-                            : `${formatNumber(analysis.topShare * 100)}%`
-                        }
-                        description={`Share of interactions among the ${analysis.topCount} highest ranked posts`}
-                        background='bg-[#FFEAF3]'
-                      />
-                    </div>
-                  </div>
-
-                  <p className='mt-5 text-xs leading-6 text-[#736C82]'>
-                    These are descriptive statistics calculated from loaded
-                    posts. They do not measure content quality or explain why a
-                    post received attention.
-                  </p>
-                </Panel>
-
-                <Panel
-                  title='How your insights work 🔍'
-                  description="A little transparency goes a long way. Here's how we turn Sociality posts into useful observations."
-                >
-                  <div className='grid gap-3 md:grid-cols-2'>
+                  <div className='mt-5 grid gap-3 md:grid-cols-2'>
                     {[
                       {
-                        title: '1. Gather posts',
-                        text: 'We request paginated post data from the Sociality API.',
+                        title: 'Missing values are not zero',
+                        text: 'If an interaction count is missing or invalid, the post is excluded from complete count analysis.',
                       },
                       {
-                        title: '2. Check the data',
-                        text: 'We validate counts and remove repeated post IDs.',
+                        title: 'Repeated IDs are counted once',
+                        text: 'Duplicate post IDs are removed before calculating metrics.',
                       },
                       {
-                        title: '3. Explore patterns',
-                        text: 'We analyze recorded interactions and classify captions using simple keywords.',
+                        title: 'Pagination affects coverage',
+                        text: 'Results describe the loaded API pages and can change when more posts become available.',
                       },
                       {
-                        title: '4. Explain limitations',
-                        text: 'We identify missing information and avoid unsupported predictions.',
+                        title: 'No unsupported metrics',
+                        text: 'We do not estimate reach, impressions, retention, or viral probability from likes and comments alone.',
                       },
-                    ].map((step) => (
+                    ].map((item) => (
                       <div
-                        key={step.title}
-                        className='rounded-2xl border border-[#E9E5F4] bg-[#FBFAFF] p-5'
+                        key={item.title}
+                        className='rounded-2xl border border-[#EBE7F3] p-4'
                       >
-                        <h3 className='font-bold'>{step.title}</h3>
-
-                        <p className='mt-2 text-sm leading-7 text-[#655B78]'>
-                          {step.text}
+                        <p className='flex items-center gap-2 text-sm font-bold'>
+                          <CheckCircle2 size={17} className='text-[#6936F2]' />
+                          {item.title}
+                        </p>
+                        <p className='mt-2 text-xs leading-6 text-[#655B78]'>
+                          {item.text}
                         </p>
                       </div>
                     ))}
                   </div>
                 </Panel>
-              </div>
-            )}
 
-            {/* SELECTED POST */}
+                <Panel
+                  title='Understand your interaction patterns 📊'
+                  description='These descriptive statistics show how recorded interactions are distributed across the posts currently analyzed.'
+                >
+                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                    <Metric
+                      emoji='📍'
+                      label='Median interactions'
+                      value={formatMaybe(analysis.median)}
+                      description='The middle value across analyzed posts'
+                      background='bg-[#EEE8FF]'
+                    />
 
-            {selected && (
-              <section className='rounded-[26px] border border-[#DCD1FA] bg-white p-5 shadow-sm sm:p-7'>
-                <div className='flex items-start justify-between gap-3'>
-                  <div>
-                    <p className='text-xs font-bold uppercase tracking-wider text-[#6936F2]'>
-                      Post Explorer
-                    </p>
+                    <Metric
+                      emoji='📈'
+                      label='Top 10% share'
+                      value={
+                        analysis.topShare === null
+                          ? 'Not available'
+                          : `${formatNumber(analysis.topShare * 100)}%`
+                      }
+                      description={`${analysis.topCount} highest interaction posts`}
+                      background='bg-[#FFEAF3]'
+                    />
 
-                    <h2 className='mt-2 text-xl font-black'>
-                      Let's take a closer look 🔎
-                    </h2>
+                    <Metric
+                      emoji='⚖️'
+                      label='Gini coefficient'
+                      value={formatMaybe(analysis.gini)}
+                      description='Descriptive interaction concentration'
+                      background='bg-[#E5F7F6]'
+                    />
+
+                    <Metric
+                      emoji='🧩'
+                      label='HHI'
+                      value={formatMaybe(analysis.hhi)}
+                      description='Sum of squared interaction shares'
+                      background='bg-[#FFF2DF]'
+                    />
                   </div>
 
-                  <button
-                    type='button'
-                    onClick={() => setSelectedId(null)}
-                    className='rounded-full bg-[#F3EEFF] px-3 py-2 text-xs font-bold text-[#6936F2]'
-                  >
-                    Close
-                  </button>
-                </div>
+                  <p className='mt-5 text-sm leading-7 text-[#655B78]'>
+                    A higher concentration means recorded interactions are
+                    distributed less evenly among the analyzed posts. This does
+                    not measure creator quality or explain why the pattern
+                    occurred.
+                  </p>
+                </Panel>
 
-                <p className='mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-[#51466E]'>
-                  {selected.caption || `Post #${selected.id}`}
-                </p>
+                <Panel
+                  title='The Lorenz Curve 📉'
+                  description='See how recorded interactions accumulate from posts with the fewest interactions to posts with the most.'
+                >
+                  <LorenzCurve posts={analysis.posts} />
 
-                <p className='mt-3 text-xs text-[#736C82]'>
-                  By {selected.author}
-                </p>
+                  <p className='mt-4 text-xs leading-6 text-[#736C82]'>
+                    The diagonal represents equal shares. The purple curve
+                    describes only the currently analyzed posts.
+                  </p>
+                </Panel>
 
-                <div className='mt-5 grid grid-cols-3 gap-3'>
-                  <Metric
-                    emoji='💜'
-                    label='Likes'
-                    value={formatNumber(selected.likes)}
-                    description='Recorded likes'
-                    background='bg-[#FFEAF3]'
-                  />
+                <Panel
+                  title='Methods and limitations 🔬'
+                  description='A transparent explanation for anyone who wants to understand how the numbers are produced.'
+                >
+                  <div className='space-y-4 text-sm leading-7 text-[#51466E]'>
+                    <p>
+                      <strong>Data source:</strong> Sociality API responses for{' '}
+                      {scope}. Pages are loaded in batches of {PAGE_SIZE}, with
+                      a maximum of {MAX_PAGES} pages in the current session.
+                    </p>
 
-                  <Metric
-                    emoji='💬'
-                    label='Comments'
-                    value={formatNumber(selected.comments)}
-                    description='Recorded comments'
-                    background='bg-[#E5F7F6]'
-                  />
+                    <p>
+                      <strong>Interactions:</strong> Recorded likes plus
+                      recorded comments. This is not an engagement rate.
+                    </p>
 
-                  <Metric
-                    emoji='✨'
-                    label='Interactions'
-                    value={formatNumber(selected.total)}
-                    description='Likes plus comments'
-                    background='bg-[#EEE8FF]'
-                  />
-                </div>
-              </section>
+                    <p>
+                      <strong>Median:</strong> The middle observed value after
+                      sorting interaction counts. For an even number of posts,
+                      we use the average of the two middle values.
+                    </p>
+
+                    <p>
+                      <strong>Gini:</strong> Calculated from nonnegative
+                      recorded interaction totals. It is unavailable when total
+                      recorded interactions equal zero.
+                    </p>
+
+                    <p>
+                      <strong>HHI:</strong> The sum of squared shares of each
+                      post in total recorded interactions. It is unavailable
+                      when total interactions equal zero.
+                    </p>
+
+                    <p>
+                      <strong>Top 10% share:</strong> The share of interactions
+                      contributed by the highest interaction posts. The number
+                      of posts is rounded up.
+                    </p>
+
+                    <p>
+                      <strong>Opportunity Radar:</strong> A transparent keyword
+                      based classification. Posts can match multiple themes.
+                      Classification errors are possible.
+                    </p>
+
+                    <p>
+                      <strong>Fair comparison:</strong> Raw recorded
+                      interactions can be compared, but exposure adjusted
+                      performance cannot be established without additional
+                      variables.
+                    </p>
+
+                    <p>
+                      <strong>Recommendations:</strong> Creative ideas for
+                      testing, not causal estimates or guarantees of growth.
+                    </p>
+                  </div>
+                </Panel>
+              </div>
             )}
 
-            {/* PAGINATION */}
+            {/* Pagination */}
 
-            <section className='rounded-[26px] border border-[#E9E5F4] bg-white p-5 sm:p-7'>
-              <div className='flex flex-wrap items-center justify-between gap-4'>
-                <div>
-                  <h2 className='text-lg font-bold'>Keep exploring 🌍</h2>
+            <section className='flex flex-wrap items-center justify-between gap-4 rounded-[26px] border border-[#E9E5F4] bg-white p-5 sm:p-7'>
+              <div>
+                <h2 className='text-lg font-bold'>Keep exploring 🌍</h2>
 
-                  <p className='mt-2 text-sm leading-6 text-[#655B78]'>
-                    {formatNumber(analysis.uniqueCount)} unique posts loaded
-                    across {pagesLoaded} pages.
-                    {partial
-                      ? ' More posts may be available.'
-                      : ' No additional page is currently reported.'}
+                <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                  {formatNumber(analysis.uniqueCount)} unique posts loaded
+                  across {pagesLoaded} pages.
+                  {partial
+                    ? ' More posts may be available.'
+                    : ' No additional page is currently reported.'}
+                </p>
+
+                {reachedLimit && (
+                  <p className='mt-2 text-xs font-semibold text-amber-800'>
+                    The current analysis has reached its pagination safety
+                    limit.
                   </p>
-                </div>
-
-                {query.hasNextPage && !reachedLimit && (
-                  <button
-                    type='button'
-                    onClick={() => query.fetchNextPage()}
-                    disabled={query.isFetching}
-                    className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-5 py-3 text-sm font-bold text-white hover:bg-[#5526D7] disabled:opacity-60'
-                  >
-                    {query.isFetchingNextPage
-                      ? 'Loading more...'
-                      : 'Load more posts'}
-
-                    <ArrowRight size={16} />
-                  </button>
                 )}
               </div>
+
+              {query.hasNextPage && !reachedLimit && (
+                <button
+                  type='button'
+                  onClick={() => void query.fetchNextPage()}
+                  disabled={query.isFetching}
+                  className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-5 py-3 text-sm font-bold text-white hover:bg-[#5526D7] disabled:opacity-60'
+                >
+                  {query.isFetchingNextPage
+                    ? 'Loading more...'
+                    : 'Load more posts'}
+
+                  <ArrowRight size={16} />
+                </button>
+              )}
             </section>
 
-            {/* FOOTER */}
+            {/* Footer */}
 
             <footer className='flex flex-wrap items-center justify-center gap-2 pb-5 text-center text-xs leading-6 text-[#736C82]'>
               <Heart size={14} />

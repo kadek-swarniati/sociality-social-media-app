@@ -1,6 +1,11 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-type ProfileTab = 'posts' | 'likes' | 'saved';
+export type ProfileTab =
+  | 'posts'
+  | 'likes'
+  | 'saved'
+  | 'followers'
+  | 'following';
 
 interface UiState {
   isCreatePostOpen: boolean;

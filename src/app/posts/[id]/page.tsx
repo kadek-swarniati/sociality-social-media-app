@@ -64,7 +64,6 @@ export default function PostDetailPage() {
   const status = statusQuery.data;
 
   const isLiked = status?.likedPostIds.has(postId) ?? post?.isLiked ?? false;
-
   const isSaved = status?.savedPostIds.has(postId) ?? post?.isSaved ?? false;
 
   const actionsReady = isAuthenticated && statusQuery.isSuccess;
@@ -89,6 +88,15 @@ export default function PostDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ['explore-posts'],
       }),
+      queryClient.invalidateQueries({
+        queryKey: ['my-post-list'],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['user-posts'],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['post-likes', postId],
+      }),
     ]);
   }
 
@@ -97,7 +105,6 @@ export default function PostDetailPage() {
       if (!previous) return previous;
 
       const likedPostIds = new Set(previous.likedPostIds);
-
       const savedPostIds = new Set(previous.savedPostIds);
 
       const target = kind === 'like' ? likedPostIds : savedPostIds;
@@ -256,6 +263,12 @@ export default function PostDetailPage() {
 
     onSuccess: async () => {
       await invalidatePostLists();
+
+      queryClient.removeQueries({
+        queryKey: ['post', postId],
+        exact: true,
+      });
+
       router.replace('/feed');
     },
 
@@ -365,6 +378,7 @@ export default function PostDetailPage() {
                     type='button'
                     disabled={!actionsReady || likeMutation.isPending}
                     onClick={() => {
+                      if (!actionsReady || likeMutation.isPending) return;
                       likeMutation.mutate(isLiked);
                     }}
                     aria-label={isLiked ? 'Unlike post' : 'Like post'}
@@ -396,6 +410,7 @@ export default function PostDetailPage() {
                     type='button'
                     disabled={!actionsReady || saveMutation.isPending}
                     onClick={() => {
+                      if (!actionsReady || saveMutation.isPending) return;
                       saveMutation.mutate(isSaved);
                     }}
                     aria-label={isSaved ? 'Unsave post' : 'Save post'}
@@ -496,7 +511,8 @@ export default function PostDetailPage() {
                   <button
                     type='button'
                     onClick={() => setConfirmDelete(false)}
-                    className='rounded-full border border-white/20 px-5 py-2 text-sm'
+                    disabled={deleteMutation.isPending}
+                    className='rounded-full border border-white/20 px-5 py-2 text-sm disabled:opacity-50'
                   >
                     Cancel
                   </button>

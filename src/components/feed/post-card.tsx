@@ -54,7 +54,6 @@ export default function PostCard({ post }: PostCardProps) {
   const status = statusQuery.data;
 
   const isLiked = status?.likedPostIds.has(post.id) ?? false;
-
   const isSaved = status?.savedPostIds.has(post.id) ?? false;
 
   function updateCachedStatus(kind: 'like' | 'save', enabled: boolean) {
@@ -129,6 +128,15 @@ export default function PostCard({ post }: PostCardProps) {
         queryClient.invalidateQueries({
           queryKey: ['post', post.id],
         }),
+        queryClient.invalidateQueries({
+          queryKey: ['post-likes', post.id],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['my-post-list'],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['user-posts'],
+        }),
       ]);
 
       setOptimisticLikeCount(null);
@@ -179,6 +187,9 @@ export default function PostCard({ post }: PostCardProps) {
         }),
         queryClient.invalidateQueries({
           queryKey: ['post', post.id],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['my-post-list'],
         }),
       ]);
     },

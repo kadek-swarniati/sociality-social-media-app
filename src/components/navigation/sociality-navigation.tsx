@@ -3,12 +3,20 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Compass, Home, LogOut, Plus, Search, UserRound } from 'lucide-react';
+import {
+  BarChart3,
+  Compass,
+  Home,
+  LogOut,
+  Plus,
+  Search,
+  UserRound,
+} from 'lucide-react';
 
 import { useAuth } from '@/components/auth/auth-provider';
 import SocialityLogo from '@/components/branding/sociality-logo';
 
-const links = [
+const primaryLinks = [
   {
     href: '/feed',
     label: 'Home',
@@ -33,6 +41,15 @@ const links = [
     href: '/me',
     label: 'Profile',
     icon: UserRound,
+  },
+];
+
+const desktopLinks = [
+  ...primaryLinks,
+  {
+    href: '/insights',
+    label: 'Insights',
+    icon: BarChart3,
   },
 ];
 
@@ -65,7 +82,7 @@ export default function SocialityNavigation() {
           aria-label='Desktop navigation'
           className='mt-11 flex flex-1 flex-col gap-2'
         >
-          {links.map((item) => {
+          {desktopLinks.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
 
@@ -132,7 +149,21 @@ export default function SocialityNavigation() {
       <header className='sticky top-0 z-40 flex h-[64px] items-center justify-between border-b border-white/[0.08] bg-black/95 px-4 backdrop-blur-xl md:hidden'>
         <SocialityLogo href='/feed' width={125} height={27} />
 
-        <div className='flex items-center gap-3'>
+        <div className='flex items-center gap-2'>
+          <Link
+            href='/insights'
+            aria-label='Insights'
+            title='Insights'
+            aria-current={isActive('/insights') ? 'page' : undefined}
+            className={`rounded-full p-2 transition-colors ${
+              isActive('/insights')
+                ? 'bg-[#6936F2]/20 text-[#B99AFF]'
+                : 'text-[#D5D7DA] hover:bg-white/10'
+            }`}
+          >
+            <BarChart3 className='size-5' />
+          </Link>
+
           <Link
             href='/users/search'
             aria-label='Search people'
@@ -153,12 +184,12 @@ export default function SocialityNavigation() {
         </div>
       </header>
 
-      {/* Mobile bottom navigation */}
+      {/* Mobile bottom navigation: original five items */}
       <nav
         aria-label='Mobile navigation'
         className='fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-[#0A0D12]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden'
       >
-        {links.map((item) => {
+        {primaryLinks.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           const isCreate = item.href === '/posts/new';
