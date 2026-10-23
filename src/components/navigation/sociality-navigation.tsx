@@ -10,6 +10,7 @@ import {
   LogOut,
   Plus,
   Search,
+  Sparkles,
   UserRound,
 } from 'lucide-react';
 
@@ -17,40 +18,12 @@ import { useAuth } from '@/components/auth/auth-provider';
 import SocialityLogo from '@/components/branding/sociality-logo';
 
 const primaryLinks = [
-  {
-    href: '/feed',
-    label: 'Home',
-    icon: Home,
-  },
-  {
-    href: '/explore',
-    label: 'Explore',
-    icon: Compass,
-  },
-  {
-    href: '/users/search',
-    label: 'Search',
-    icon: Search,
-  },
-  {
-    href: '/posts/new',
-    label: 'Create',
-    icon: Plus,
-  },
-  {
-    href: '/me',
-    label: 'Profile',
-    icon: UserRound,
-  },
-];
-
-const desktopLinks = [
-  ...primaryLinks,
-  {
-    href: '/insights',
-    label: 'Insights',
-    icon: BarChart3,
-  },
+  { href: '/feed', label: 'Home', icon: Home },
+  { href: '/explore', label: 'Explore', icon: Compass },
+  { href: '/users/search', label: 'Search', icon: Search },
+  { href: '/posts/new', label: 'Create', icon: Plus },
+  { href: '/me', label: 'Profile', icon: UserRound },
+  { href: '/insights', label: 'Insights', icon: BarChart3 },
 ];
 
 export default function SocialityNavigation() {
@@ -82,9 +55,35 @@ export default function SocialityNavigation() {
           aria-label='Desktop navigation'
           className='mt-11 flex flex-1 flex-col gap-2'
         >
-          {desktopLinks.map((item) => {
+          {primaryLinks.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
+            const isInsights = item.href === '/insights';
+
+            if (isInsights) {
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`relative mt-3 flex min-h-14 items-center gap-3 rounded-xl border px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B99AFF] ${
+                    active
+                      ? 'border-[#B99AFF] bg-[#6936F2] text-white shadow-[0_0_22px_rgba(105,54,242,0.35)]'
+                      : 'border-[#895CFF]/60 bg-[#6936F2]/20 text-[#DCCBFF] hover:border-[#B99AFF] hover:bg-[#6936F2]/35'
+                  }`}
+                >
+                  <span className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#895CFF]/25'>
+                    <Icon className='size-5' />
+                  </span>
+
+                  <span className='flex-1'>Creator Insights</span>
+
+                  <span className='rounded-full bg-[#E9DFFF] px-2 py-0.5 text-[9px] font-extrabold tracking-wide text-[#4B1DA6]'>
+                    NEW
+                  </span>
+                </Link>
+              );
+            }
 
             return (
               <Link
@@ -152,16 +151,13 @@ export default function SocialityNavigation() {
         <div className='flex items-center gap-2'>
           <Link
             href='/insights'
-            aria-label='Insights'
-            title='Insights'
+            aria-label='Creator Insights'
+            title='Creator Insights'
             aria-current={isActive('/insights') ? 'page' : undefined}
-            className={`rounded-full p-2 transition-colors ${
-              isActive('/insights')
-                ? 'bg-[#6936F2]/20 text-[#B99AFF]'
-                : 'text-[#D5D7DA] hover:bg-white/10'
-            }`}
+            className='relative rounded-full bg-[#6936F2]/25 p-2 text-[#C8AEFF] transition-colors hover:bg-[#6936F2]/40'
           >
             <BarChart3 className='size-5' />
+            <span className='absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-black bg-[#C8AEFF]' />
           </Link>
 
           <Link
@@ -184,15 +180,46 @@ export default function SocialityNavigation() {
         </div>
       </header>
 
-      {/* Mobile bottom navigation: original five items */}
+      {/* Mobile bottom navigation: six items */}
       <nav
         aria-label='Mobile navigation'
-        className='fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-[#0A0D12]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden'
+        className='fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-white/10 bg-[#0A0D12]/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden'
       >
         {primaryLinks.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           const isCreate = item.href === '/posts/new';
+          const isInsights = item.href === '/insights';
+
+          if (isInsights) {
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-label='Creator Insights — new feature'
+                aria-current={active ? 'page' : undefined}
+                className='flex min-h-[70px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-[#6936F2]/25 px-0.5 text-[#DCCBFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B99AFF]'
+              >
+                <span
+                  className={`flex size-8 items-center justify-center rounded-full ${
+                    active
+                      ? 'bg-[#895CFF] text-white'
+                      : 'bg-[#6936F2]/50 text-[#E9DFFF]'
+                  }`}
+                >
+                  <Icon className='size-[19px]' />
+                </span>
+
+                <span className='text-[9px] font-bold leading-none'>
+                  Insights
+                </span>
+
+                <span className='rounded-full bg-[#E9DFFF] px-1.5 py-0.5 text-[8px] font-extrabold leading-none tracking-wide text-[#4B1DA6]'>
+                  NEW
+                </span>
+              </Link>
+            );
+          }
 
           return (
             <Link
@@ -200,7 +227,7 @@ export default function SocialityNavigation() {
               href={item.href}
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
-              className='flex min-h-[64px] flex-col items-center justify-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B99AFF]'
+              className='flex min-h-[70px] min-w-0 flex-col items-center justify-center gap-1 px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B99AFF]'
             >
               <span
                 className={`flex size-8 items-center justify-center rounded-full ${
@@ -211,11 +238,11 @@ export default function SocialityNavigation() {
                       : 'text-[#A4A7AE]'
                 }`}
               >
-                <Icon className='size-5' />
+                <Icon className='size-[19px]' />
               </span>
 
               <span
-                className={`text-[10px] ${
+                className={`text-[9px] leading-none ${
                   active ? 'font-semibold text-[#B99AFF]' : 'text-[#A4A7AE]'
                 }`}
               >
