@@ -10,7 +10,6 @@ import {
   LogOut,
   Plus,
   Search,
-  Sparkles,
   UserRound,
 } from 'lucide-react';
 
@@ -148,36 +147,15 @@ export default function SocialityNavigation() {
       <header className='sticky top-0 z-40 flex h-[64px] items-center justify-between border-b border-white/[0.08] bg-black/95 px-4 backdrop-blur-xl md:hidden'>
         <SocialityLogo href='/feed' width={125} height={27} />
 
-        <div className='flex items-center gap-2'>
-          <Link
-            href='/insights'
-            aria-label='Creator Insights'
-            title='Creator Insights'
-            aria-current={isActive('/insights') ? 'page' : undefined}
-            className='relative rounded-full bg-[#6936F2]/25 p-2 text-[#C8AEFF] transition-colors hover:bg-[#6936F2]/40'
-          >
-            <BarChart3 className='size-5' />
-            <span className='absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-black bg-[#C8AEFF]' />
-          </Link>
-
-          <Link
-            href='/users/search'
-            aria-label='Search people'
-            className='rounded-full p-2 text-[#D5D7DA] hover:bg-white/10'
-          >
-            <Search className='size-5' />
-          </Link>
-
-          <button
-            type='button'
-            onClick={handleLogout}
-            aria-label='Log out'
-            title='Log out'
-            className='rounded-full p-2 text-[#D5D7DA] hover:bg-white/10'
-          >
-            <LogOut className='size-5' />
-          </button>
-        </div>
+        <button
+          type='button'
+          onClick={handleLogout}
+          aria-label='Log out'
+          title='Log out'
+          className='rounded-full p-2 text-[#D5D7DA] transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B99AFF]'
+        >
+          <LogOut className='size-5' />
+        </button>
       </header>
 
       {/* Mobile bottom navigation: six items */}
