@@ -4,22 +4,29 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  ArrowUpRight,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
   ChevronDown,
+  Compass,
   Database,
   Heart,
+  Lightbulb,
   LoaderCircle,
   MessageCircle,
   RefreshCw,
+  Search,
   ShieldCheck,
-  Sparkles,
+  Target,
+  TrendingUp,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { getMyPostList } from '@/lib/api/account';
 import { api } from '@/lib/api/client';
 
 type Mode = 'personal' | 'community';
+type Tab = 'discover' | 'improve' | 'advanced';
 type SortBy = 'total' | 'likes' | 'comments';
 type JsonObject = Record<string, unknown>;
 
@@ -42,39 +49,142 @@ type CompletePost = Post & {
   total: number;
 };
 
+type Topic = {
+  id: string;
+  title: string;
+  emoji: string;
+  words: string[];
+  color: string;
+};
+
 const PAGE_SIZE = 12;
 const MAX_PAGES = 20;
-const PURPLE = '#6936F2';
-const CYAN = '#0891B2';
+const REFRESH_INTERVAL = 60_000;
 
-function obj(value: unknown): JsonObject {
+const TOPICS: Topic[] = [
+  {
+    id: 'learning',
+    title: 'Learning and tips',
+    emoji: '💡',
+    words: [
+      'learn',
+      'learning',
+      'tips',
+      'tutorial',
+      'study',
+      'how to',
+      'belajar',
+      'cara',
+      'ilmu',
+      'skill',
+    ],
+    color: 'bg-amber-50 border-amber-200',
+  },
+  {
+    id: 'story',
+    title: 'Personal stories',
+    emoji: '🌷',
+    words: [
+      'story',
+      'journey',
+      'today',
+      'experience',
+      'life',
+      'cerita',
+      'pengalaman',
+      'hari ini',
+      'perjalanan',
+    ],
+    color: 'bg-pink-50 border-pink-200',
+  },
+  {
+    id: 'question',
+    title: 'Questions and discussions',
+    emoji: '💬',
+    words: [
+      '?',
+      'what do you think',
+      'thoughts',
+      'opinion',
+      'menurut',
+      'bagaimana',
+      'pendapat',
+      'diskusi',
+    ],
+    color: 'bg-sky-50 border-sky-200',
+  },
+  {
+    id: 'creative',
+    title: 'Creative inspiration',
+    emoji: '🎨',
+    words: [
+      'design',
+      'art',
+      'creative',
+      'photo',
+      'music',
+      'create',
+      'kreatif',
+      'desain',
+      'foto',
+      'karya',
+    ],
+    color: 'bg-violet-50 border-violet-200',
+  },
+];
+
+const CHALLENGES = [
+  {
+    id: 'hook',
+    emoji: '⚡',
+    title: 'The Hook Remix',
+    text: 'Try a new opening sentence for your next post.',
+  },
+  {
+    id: 'question',
+    emoji: '💬',
+    title: 'Start a Conversation',
+    text: 'Invite your audience to share a genuine thought.',
+  },
+  {
+    id: 'story',
+    emoji: '🌷',
+    title: 'Tell a Tiny Story',
+    text: 'Share one meaningful moment from your day.',
+  },
+];
+
+function objectOf(value: unknown): JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as JsonObject)
     : {};
 }
 
-function str(value: unknown): string {
+function stringOf(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function count(value: unknown): number | null {
+function countOf(value: unknown): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
   }
 
-  const n = Number(value);
-  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+  const number = Number(value);
+
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
 
 function parseCommunity(value: unknown, page: number): Page {
-  const root = obj(value);
+  const root = objectOf(value);
 
   if (root.success === false) {
-    throw new Error(str(root.message) || 'Unable to load posts.');
+    throw new Error(
+      stringOf(root.message) || 'Unable to load community posts.'
+    );
   }
 
   const data = root.data ?? value;
-  const payload = obj(data);
+  const payload = objectOf(data);
 
   const candidates: unknown[] = [
     data,
@@ -88,30 +198,33 @@ function parseCommunity(value: unknown, page: number): Page {
   const raw = candidates.find(Array.isArray);
 
   if (!Array.isArray(raw)) {
-    throw new Error('Unexpected posts response format.');
+    throw new Error('Unexpected community posts response format.');
   }
 
   const items: Post[] = raw.map((entry: unknown) => {
-    const post = obj(entry);
-    const author = obj(post.author ?? post.user);
+    const post = objectOf(entry);
+    const author = objectOf(post.author ?? post.user);
     const id = Number(post.id);
 
     if (!Number.isSafeInteger(id) || id <= 0) {
-      throw new Error('Invalid post ID.');
+      throw new Error('Invalid post ID returned by the API.');
     }
 
     return {
       id,
-      caption: str(post.caption) || str(post.content),
-      author: str(author.username) || str(author.name) || 'Sociality User',
-      likes: count(post.likeCount ?? post.likesCount ?? post.likes_count),
-      comments: count(
+      caption: stringOf(post.caption) || stringOf(post.content),
+      author:
+        stringOf(author.username) ||
+        stringOf(author.name) ||
+        'Sociality Creator',
+      likes: countOf(post.likeCount ?? post.likesCount ?? post.likes_count),
+      comments: countOf(
         post.commentCount ?? post.commentsCount ?? post.comments_count
       ),
     };
   });
 
-  const pagination = obj(payload.pagination ?? root.pagination);
+  const pagination = objectOf(payload.pagination ?? root.pagination);
 
   const totalPages = Number(
     pagination.totalPages ?? pagination.total_pages ?? payload.totalPages
@@ -140,47 +253,35 @@ async function fetchPosts(mode: Mode, page: number): Promise<Page> {
         id: post.id,
         caption: post.caption,
         author: 'You',
-        likes: post.likesCount,
-        comments: post.commentsCount,
+        likes: countOf(post.likesCount),
+        comments: countOf(post.commentsCount),
       })),
       hasNextPage: result.hasNextPage,
     };
   }
 
   const response = await api.get<unknown>('/posts', {
-    params: { page, limit: PAGE_SIZE },
+    params: {
+      page,
+      limit: PAGE_SIZE,
+    },
   });
 
   return parseCommunity(response.data, page);
 }
 
-function fmt(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
-function label(post: Post): string {
-  const text = post.caption.trim();
-  return text
-    ? text.slice(0, 48) + (text.length > 48 ? '…' : '')
+function postLabel(post: Post): string {
+  const caption = post.caption.trim();
+
+  return caption
+    ? caption.slice(0, 95) + (caption.length > 95 ? '…' : '')
     : `Post #${post.id}`;
-}
-
-function gini(values: number[]): number | null {
-  if (!values.length) return null;
-
-  const sorted = [...values].sort((a, b) => a - b);
-  const sum = sorted.reduce((a, b) => a + b, 0);
-
-  if (sum === 0) return null;
-
-  const weighted = sorted.reduce(
-    (acc, value, index) => acc + value * (index + 1),
-    0
-  );
-
-  return (
-    (2 * weighted) / (sorted.length * sum) - (sorted.length + 1) / sorted.length
-  );
 }
 
 function median(values: number[]): number | null {
@@ -194,108 +295,137 @@ function median(values: number[]): number | null {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+function gini(values: number[]): number | null {
+  if (!values.length) return null;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = sorted.reduce((a, b) => a + b, 0);
+
+  if (sum === 0) return null;
+
+  const weighted = sorted.reduce(
+    (total, value, index) => total + value * (index + 1),
+    0
+  );
+
+  return (
+    (2 * weighted) / (sorted.length * sum) - (sorted.length + 1) / sorted.length
+  );
+}
+
+function topicFor(caption: string): Topic | null {
+  const text = caption.toLowerCase();
+
+  return (
+    TOPICS.find((topic) =>
+      topic.words.some((word) => {
+        if (word === '?') return text.includes('?');
+
+        const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        return new RegExp(
+          `(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`,
+          'u'
+        ).test(text);
+      })
+    ) ?? null
+  );
+}
+
 function Panel({
   title,
   description,
   children,
+  action,
 }: {
   title: string;
   description: string;
-  children: React.ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
 }) {
   return (
-    <section className='rounded-2xl border border-neutral-200 bg-white p-5 text-neutral-950 shadow-sm sm:p-7'>
-      <h2 className='text-xl font-bold tracking-tight'>{title}</h2>
-      <p className='mt-1 mb-6 text-sm leading-6 text-neutral-600'>
-        {description}
-      </p>
+    <section className='rounded-[26px] border border-[#E9E5F4] bg-white p-5 text-[#25213B] shadow-sm sm:p-7'>
+      <div className='mb-5 flex flex-wrap items-start justify-between gap-3'>
+        <div>
+          <h2 className='text-xl font-bold tracking-tight sm:text-2xl'>
+            {title}
+          </h2>
+
+          <p className='mt-2 max-w-2xl text-sm leading-6 text-[#6B657C]'>
+            {description}
+          </p>
+        </div>
+
+        {action}
+      </div>
+
       {children}
     </section>
   );
 }
 
-function MetricCard({
-  title,
+function Metric({
+  emoji,
+  label,
   value,
-  detail,
+  description,
+  background,
 }: {
-  title: string;
+  emoji: string;
+  label: string;
   value: string;
-  detail: string;
+  description: string;
+  background: string;
 }) {
   return (
-    <div className='rounded-2xl border border-neutral-200 bg-white p-5 text-neutral-950 shadow-sm'>
-      <p className='text-sm font-medium text-neutral-600'>{title}</p>
-      <p className='mt-2 text-3xl font-bold tracking-tight'>{value}</p>
-      <p className='mt-2 text-xs leading-5 text-neutral-600'>{detail}</p>
+    <div className={`rounded-[22px] border border-white/80 p-5 ${background}`}>
+      <span className='text-2xl' aria-hidden='true'>
+        {emoji}
+      </span>
+
+      <p className='mt-3 text-sm font-semibold text-[#5D5572]'>{label}</p>
+
+      <p className='mt-1 text-3xl font-black tracking-tight text-[#211A39]'>
+        {value}
+      </p>
+
+      <p className='mt-2 text-xs leading-5 text-[#6B657C]'>{description}</p>
     </div>
   );
 }
 
-function RankedBars({
-  posts,
-  selectedId,
+function PostCard({
+  post,
+  selected,
   onSelect,
-  sortBy,
 }: {
-  posts: CompletePost[];
-  selectedId: number | null;
+  post: CompletePost;
+  selected: boolean;
   onSelect: (id: number) => void;
-  sortBy: SortBy;
 }) {
-  const ranked = [...posts]
-    .sort((a, b) => b[sortBy] - a[sortBy] || a.id - b.id)
-    .slice(0, 10);
-
-  const max = Math.max(1, ...ranked.map((p) => p.total));
-
-  if (!ranked.length) {
-    return <p className='text-neutral-600'>No posts to compare yet.</p>;
-  }
-
   return (
-    <div className='space-y-3'>
-      <div className='flex flex-wrap gap-4 text-xs text-neutral-700'>
-        <span>🟣 Likes</span>
-        <span>🔵 Comments</span>
+    <button
+      type='button'
+      onClick={() => onSelect(post.id)}
+      aria-pressed={selected}
+      className={`w-full rounded-2xl border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[#6936F2] ${
+        selected
+          ? 'border-[#6936F2] bg-[#F3EEFF]'
+          : 'border-[#EBE7F3] bg-white hover:bg-[#FAF8FF]'
+      }`}
+    >
+      <p className='line-clamp-2 text-sm font-semibold leading-6 text-[#25213B]'>
+        {postLabel(post)}
+      </p>
+
+      <p className='mt-1 text-xs text-[#736C82]'>By {post.author}</p>
+
+      <div className='mt-3 flex flex-wrap gap-3 text-xs font-semibold text-[#51466E]'>
+        <span>💜 {post.likes} likes</span>
+        <span>💬 {post.comments} comments</span>
+        <span>✨ {post.total} interactions</span>
       </div>
-
-      {ranked.map((post) => (
-        <button
-          key={post.id}
-          type='button'
-          onClick={() => onSelect(post.id)}
-          aria-pressed={selectedId === post.id}
-          className={`w-full rounded-xl p-3 text-left transition focus-visible:outline-2 focus-visible:outline-violet-600 ${
-            selectedId === post.id
-              ? 'bg-violet-50 ring-2 ring-violet-300'
-              : 'hover:bg-neutral-50'
-          }`}
-        >
-          <div className='mb-2 flex items-start justify-between gap-3 text-sm'>
-            <span className='min-w-0 break-words font-medium'>
-              {label(post)}
-            </span>
-            <span className='shrink-0 font-bold'>{fmt(post[sortBy])}</span>
-          </div>
-
-          <div className='flex h-3 overflow-hidden rounded-full bg-neutral-100'>
-            <div
-              className='bg-[#6936F2]'
-              style={{ width: `${(post.likes / max) * 100}%` }}
-            />
-            <div
-              className='bg-[#0891B2]'
-              style={{ width: `${(post.comments / max) * 100}%` }}
-            />
-          </div>
-
-          <p className='mt-2 text-xs text-neutral-600'>
-            {post.likes} likes · {post.comments} comments
-          </p>
-        </button>
-      ))}
-    </div>
+    </button>
   );
 }
 
@@ -311,15 +441,19 @@ function BubbleChart({
   const groups = useMemo(() => {
     const map = new Map<
       string,
-      { likes: number; comments: number; posts: CompletePost[] }
+      {
+        likes: number;
+        comments: number;
+        posts: CompletePost[];
+      }
     >();
 
     for (const post of posts) {
       const key = `${post.likes}:${post.comments}`;
-      const current = map.get(key);
+      const existing = map.get(key);
 
-      if (current) {
-        current.posts.push(post);
+      if (existing) {
+        existing.posts.push(post);
       } else {
         map.set(key, {
           likes: post.likes,
@@ -329,23 +463,23 @@ function BubbleChart({
       }
     }
 
-    return [...map.values()];
+    return [...map.values()].sort((a, b) => b.posts.length - a.posts.length);
   }, [posts]);
 
   if (!posts.length) {
-    return <p className='text-sm text-neutral-600'>No data yet.</p>;
+    return <p className='text-sm text-[#6B657C]'>No posts to visualize yet.</p>;
   }
 
-  const width = 680;
-  const height = 330;
-  const left = 55;
-  const top = 30;
-  const plotWidth = 580;
-  const plotHeight = 240;
+  const left = 54;
+  const top = 35;
+  const plotWidth = 560;
+  const plotHeight = 245;
 
-  const maxLikes = Math.max(1, ...posts.map((p) => p.likes));
-  const maxComments = Math.max(1, ...posts.map((p) => p.comments));
-  const maxGroup = Math.max(1, ...groups.map((g) => g.posts.length));
+  const maxLikes = Math.max(1, ...posts.map((post) => post.likes));
+
+  const maxComments = Math.max(1, ...posts.map((post) => post.comments));
+
+  const maxGroup = Math.max(1, ...groups.map((group) => group.posts.length));
 
   const x = (value: number) => left + (value / maxLikes) * plotWidth;
 
@@ -354,12 +488,12 @@ function BubbleChart({
 
   return (
     <div>
-      <div className='overflow-x-auto'>
+      <div className='overflow-x-auto rounded-2xl bg-[#FBFAFF] p-3'>
         <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className='w-full min-w-[360px]'
+          viewBox='0 0 680 340'
+          className='w-full min-w-[350px]'
           role='img'
-          aria-label='Bubble chart. Horizontal position shows likes, vertical position shows comments, and bubble size shows how many posts share those counts.'
+          aria-label='Bubble chart showing recorded likes and comments. Larger bubbles represent more posts with identical counts.'
         >
           {[0, 0.25, 0.5, 0.75, 1].map((fraction) => (
             <g key={fraction}>
@@ -368,48 +502,49 @@ function BubbleChart({
                 x2={left + plotWidth}
                 y1={y(maxComments * fraction)}
                 y2={y(maxComments * fraction)}
-                stroke='#E5E7EB'
+                stroke='#E5E0EF'
               />
+
               <text
-                x={left - 9}
+                x={left - 10}
                 y={y(maxComments * fraction) + 4}
                 textAnchor='end'
                 fontSize='11'
-                fill='#525252'
+                fill='#655B78'
               >
-                {Number((maxComments * fraction).toFixed(1))}
+                {formatNumber(maxComments * fraction)}
+              </text>
+
+              <text
+                x={x(maxLikes * fraction)}
+                y={top + plotHeight + 20}
+                textAnchor='middle'
+                fontSize='11'
+                fill='#655B78'
+              >
+                {formatNumber(maxLikes * fraction)}
               </text>
             </g>
           ))}
 
-          <text
-            x={left + plotWidth / 2}
-            y={height - 14}
-            textAnchor='middle'
-            fontSize='13'
-            fill='#404040'
-          >
-            Likes
-          </text>
-
-          <text x={left} y={15} fontSize='13' fill='#404040'>
+          <text x={left} y='18' fontSize='13' fill='#51466E'>
             Comments
           </text>
 
           <text
-            x={left + plotWidth}
-            y={top + plotHeight + 20}
-            textAnchor='end'
-            fontSize='11'
-            fill='#525252'
+            x={left + plotWidth / 2}
+            y='330'
+            fontSize='13'
+            fill='#51466E'
+            textAnchor='middle'
           >
-            {maxLikes}
+            Likes
           </text>
 
           {groups.map((group) => {
             const selected = group.posts.some((post) => post.id === selectedId);
 
-            const radius = 8 + 19 * Math.sqrt(group.posts.length / maxGroup);
+            const radius = 9 + 17 * Math.sqrt(group.posts.length / maxGroup);
 
             return (
               <g key={`${group.likes}:${group.comments}`}>
@@ -417,13 +552,13 @@ function BubbleChart({
                   cx={x(group.likes)}
                   cy={y(group.comments)}
                   r={radius}
-                  fill={selected ? CYAN : PURPLE}
-                  fillOpacity={0.78}
-                  stroke={selected ? '#164E63' : '#FFFFFF'}
-                  strokeWidth={selected ? 3 : 2}
+                  fill={selected ? '#0891B2' : '#6936F2'}
+                  fillOpacity='0.85'
+                  stroke='#FFFFFF'
+                  strokeWidth='2'
                 >
                   <title>
-                    {`${group.posts.length} posts: ${group.likes} likes and ${group.comments} comments each`}
+                    {`${group.posts.length} posts with ${group.likes} likes and ${group.comments} comments`}
                   </title>
                 </circle>
 
@@ -443,30 +578,26 @@ function BubbleChart({
         </svg>
       </div>
 
-      <p className='mt-2 text-sm leading-6 text-neutral-700'>
-        Each bubble represents posts with the same likes and comments. The
-        number inside shows how many posts share that combination.
+      <p className='mt-3 text-sm leading-6 text-[#655B78]'>
+        Each bubble groups posts with the same counts. Choose a group below to
+        explore its posts.
       </p>
 
       <div className='mt-4 flex flex-wrap gap-2'>
         {groups.map((group) => (
           <button
-            key={`${group.likes}-${group.comments}`}
+            key={`${group.likes}:${group.comments}`}
             type='button'
             onClick={() => onSelect(group.posts[0].id)}
-            className='rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-800 hover:border-violet-500 focus-visible:outline-2 focus-visible:outline-violet-600'
+            className='rounded-full border border-[#DDD5F4] bg-white px-3 py-2 text-xs font-semibold text-[#51466E] hover:bg-[#F3EEFF]'
           >
-            {group.likes} likes · {group.comments} comments
-            {' · '}
-            {group.posts.length} post(s)
+            {group.likes} likes, {group.comments} comments
+            <span className='ml-2 text-[#6936F2]'>
+              {group.posts.length} posts
+            </span>
           </button>
         ))}
       </div>
-
-      <p className='mt-3 text-xs text-neutral-600'>
-        Selecting a group opens its first post below. The group count includes
-        every matching post, including overlapping observations.
-      </p>
     </div>
   );
 }
@@ -478,50 +609,46 @@ function LorenzCurve({ posts }: { posts: CompletePost[] }) {
 
   if (!values.length || sum === 0) {
     return (
-      <p className='text-sm text-neutral-600'>
-        Not enough interactions to draw this curve.
+      <p className='text-sm text-[#6B657C]'>
+        Not enough recorded interactions to draw this curve.
       </p>
     );
   }
 
-  let cumulative = 0;
-
   const points = [{ x: 0, y: 0 }];
+  let cumulative = 0;
 
   values.forEach((value, index) => {
     cumulative += value;
+
     points.push({
       x: (index + 1) / values.length,
       y: cumulative / sum,
     });
   });
 
-  const left = 45;
-  const top = 15;
-  const size = 260;
-
   const path = points
     .map(
       (point, index) =>
         `${index === 0 ? 'M' : 'L'} ${
-          left + point.x * size
-        } ${top + size - point.y * size}`
+          45 + point.x * 260
+        } ${280 - point.y * 260}`
     )
     .join(' ');
 
   return (
     <svg
       viewBox='0 0 360 330'
-      className='mx-auto w-full max-w-[420px]'
+      className='mx-auto w-full max-w-[430px]'
       role='img'
-      aria-label='Lorenz curve of recorded interaction totals among loaded posts.'
+      aria-label='Lorenz curve showing concentration of recorded interactions among loaded posts.'
     >
       <line
-        x1={left}
-        y1={top + size}
-        x2={left + size}
-        y2={top}
-        stroke='#A3A3A3'
+        x1='45'
+        y1='280'
+        x2='305'
+        y2='20'
+        stroke='#B7AEC8'
         strokeDasharray='5 5'
         strokeWidth='2'
       />
@@ -529,32 +656,20 @@ function LorenzCurve({ posts }: { posts: CompletePost[] }) {
       <path
         d={path}
         fill='none'
-        stroke={PURPLE}
+        stroke='#6936F2'
         strokeWidth='4'
         strokeLinecap='round'
       />
 
-      <line x1={left} y1={top} x2={left} y2={top + size} stroke='#525252' />
+      <line x1='45' y1='20' x2='45' y2='280' stroke='#655B78' />
 
-      <line
-        x1={left}
-        y1={top + size}
-        x2={left + size}
-        y2={top + size}
-        stroke='#525252'
-      />
+      <line x1='45' y1='280' x2='305' y2='280' stroke='#655B78' />
 
-      <text
-        x={left + size / 2}
-        y={top + size + 35}
-        textAnchor='middle'
-        fontSize='12'
-        fill='#525252'
-      >
+      <text x='175' y='315' textAnchor='middle' fontSize='12' fill='#655B78'>
         Share of posts
       </text>
 
-      <text x={left} y='10' fontSize='12' fill='#525252'>
+      <text x='45' y='13' fontSize='12' fill='#655B78'>
         Share of interactions
       </text>
     </svg>
@@ -563,21 +678,42 @@ function LorenzCurve({ posts }: { posts: CompletePost[] }) {
 
 export default function InsightsPage() {
   const [mode, setMode] = useState<Mode>('personal');
+
+  const [tab, setTab] = useState<Tab>('discover');
+
   const [sortBy, setSortBy] = useState<SortBy>('total');
+
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
+  const [compareA, setCompareA] = useState('');
+
+  const [compareB, setCompareB] = useState('');
+
+  const [showWhy, setShowWhy] = useState(false);
+
+  const [activeChallenge, setActiveChallenge] = useState<string | null>(null);
+
+  const [search, setSearch] = useState('');
+
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
   const query = useInfiniteQuery({
-    queryKey: ['sociality-insights-v3', mode],
+    queryKey: ['sociality-creator-playground-v1', mode],
     initialPageParam: 1,
     queryFn: ({ pageParam }) => fetchPosts(mode, pageParam),
     getNextPageParam: (last, pages) =>
       last.hasNextPage && pages.length < MAX_PAGES
         ? pages.length + 1
         : undefined,
+    staleTime: 30_000,
+    refetchInterval: autoRefresh ? REFRESH_INTERVAL : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const analysis = useMemo(() => {
     const raw = query.data?.pages.flatMap((page) => page.items) ?? [];
+
     const unique = new Map<number, Post>();
 
     for (const post of raw) {
@@ -586,9 +722,9 @@ export default function InsightsPage() {
       }
     }
 
-    const posts = [...unique.values()];
+    const allPosts = [...unique.values()];
 
-    const complete: CompletePost[] = posts.flatMap((post) => {
+    const posts: CompletePost[] = allPosts.flatMap((post) => {
       if (post.likes === null || post.comments === null) {
         return [];
       }
@@ -603,533 +739,1113 @@ export default function InsightsPage() {
       ];
     });
 
-    const likes = complete.reduce((s, p) => s + p.likes, 0);
-    const comments = complete.reduce((s, p) => s + p.comments, 0);
+    const likes = posts.reduce((sum, post) => sum + post.likes, 0);
+
+    const comments = posts.reduce((sum, post) => sum + post.comments, 0);
+
     const total = likes + comments;
 
-    const ranked = [...complete].sort(
-      (a, b) => b.total - a.total || a.id - b.id
-    );
+    const ranked = [...posts].sort((a, b) => b.total - a.total || a.id - b.id);
 
-    const topCount = Math.ceil(complete.length * 0.1);
-    const topTotal = ranked.slice(0, topCount).reduce((s, p) => s + p.total, 0);
+    const topCount = Math.ceil(posts.length * 0.1);
+
+    const topTotal = ranked
+      .slice(0, topCount)
+      .reduce((sum, post) => sum + post.total, 0);
+
+    const topics = TOPICS.map((topic) => {
+      const matches = posts.filter(
+        (post) => topicFor(post.caption)?.id === topic.id
+      );
+
+      return {
+        ...topic,
+        matches,
+        medianInteractions: median(matches.map((post) => post.total)),
+      };
+    });
 
     return {
-      posts: complete,
+      posts,
       ranked,
-      rawCount: raw.length,
-      uniqueCount: posts.length,
-      duplicates: raw.length - posts.length,
-      missing: posts.length - complete.length,
+      topics,
       likes,
       comments,
       total,
-      topCount,
-      topShare: total > 0 ? topTotal / total : null,
-      gini: gini(complete.map((p) => p.total)),
+      rawCount: raw.length,
+      uniqueCount: allPosts.length,
+      duplicates: raw.length - allPosts.length,
+      missing: allPosts.length - posts.length,
+      median: median(posts.map((post) => post.total)),
+      gini: gini(posts.map((post) => post.total)),
       hhi:
         total > 0
-          ? complete.reduce((s, p) => s + (p.total / total) ** 2, 0)
+          ? posts.reduce((sum, post) => sum + (post.total / total) ** 2, 0)
           : null,
-      median: median(complete.map((p) => p.total)),
+      topCount,
+      topShare: total > 0 ? topTotal / total : null,
     };
   }, [query.data]);
 
   const pagesLoaded = query.data?.pages.length ?? 0;
 
   const reachedLimit =
-    pagesLoaded >= MAX_PAGES && Boolean(query.data?.pages.at(-1)?.hasNextPage);
+    pagesLoaded >= MAX_PAGES &&
+    Boolean(query.data?.pages[pagesLoaded - 1]?.hasNextPage);
 
   const partial = Boolean(query.hasNextPage || reachedLimit);
-  const small = analysis.posts.length < 10;
+
+  const smallSample = analysis.posts.length < 10;
 
   const selected = analysis.posts.find((post) => post.id === selectedId);
 
-  const topPost = analysis.ranked[0];
+  const first = analysis.posts.find((post) => String(post.id) === compareA);
 
-  const scopeText = mode === 'personal' ? 'your posts' : 'community posts';
+  const second = analysis.posts.find((post) => String(post.id) === compareB);
 
-  const coverage = `Based on ${fmt(
-    analysis.posts.length
-  )} loaded ${scopeText} with complete counts`;
+  const filtered = analysis.posts
+    .filter((post) =>
+      `${post.caption} ${post.author}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase())
+    )
+    .sort((a, b) => b[sortBy] - a[sortBy] || a.id - b.id);
+
+  const activeTopics = analysis.topics.filter(
+    (topic) => topic.matches.length > 0
+  );
+
+  const evidenceStatus =
+    smallSample || partial || analysis.missing > 0
+      ? 'Early observation'
+      : 'Descriptive signal';
+
+  const scope = mode === 'personal' ? 'your posts' : 'community posts';
+
+  const lastUpdated = query.dataUpdatedAt
+    ? new Date(query.dataUpdatedAt).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
+  const changeTab = (next: Tab) => {
+    setTab(next);
+    setSelectedId(null);
+  };
 
   return (
-    <main className='mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6'>
-      <Link
-        href='/feed'
-        className='inline-flex items-center gap-2 text-sm font-medium text-neutral-300 hover:text-white'
-      >
-        <ArrowLeft size={16} />
-        Back to Feed
-      </Link>
+    <main className='min-h-screen bg-[#F8F6FF] px-4 py-6 text-[#25213B] sm:px-6 lg:px-8'>
+      <div className='mx-auto max-w-7xl space-y-6'>
+        {/* LIVE DATA CONTROLS */}
 
-      <header className='space-y-5'>
-        <div className='flex flex-wrap items-start justify-between gap-4'>
-          <div>
-            <p className='text-xs font-bold uppercase tracking-[0.2em] text-[#B99AFF]'>
-              Sociality Intelligence
-            </p>
-            <h1 className='mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl'>
-              Creator Insights
-            </h1>
-            <p className='mt-2 max-w-2xl text-sm leading-6 text-neutral-300'>
-              Understand which posts receive interactions and what the available
-              data can — and cannot — tell you.
-            </p>
-          </div>
-
-          <button
-            type='button'
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
-            className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5728D8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60'
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <Link
+            href='/feed'
+            className='inline-flex items-center gap-2 text-sm font-semibold text-[#655B78] hover:text-[#6936F2]'
           >
-            <RefreshCw
-              size={16}
-              className={query.isFetching ? 'animate-spin' : ''}
-            />
-            {query.isFetching ? 'Refreshing...' : 'Refresh'}
-          </button>
+            <ArrowLeft size={17} />
+            Back to Feed
+          </Link>
+
+          <div className='flex flex-wrap items-center gap-3'>
+            <div
+              role='status'
+              aria-live='polite'
+              className='flex flex-wrap items-center gap-3 rounded-xl border border-[#E4DCF8] bg-white px-4 py-2.5'
+            >
+              <span
+                aria-hidden='true'
+                className={`h-2.5 w-2.5 rounded-full ${
+                  query.isFetching
+                    ? 'bg-amber-400 motion-safe:animate-pulse'
+                    : query.isError
+                      ? 'bg-red-500'
+                      : 'bg-emerald-500'
+                }`}
+              />
+
+              <div>
+                <p className='text-xs font-bold text-[#25213B]'>
+                  {query.isFetching
+                    ? 'Checking for updates'
+                    : query.isError
+                      ? 'Update needs attention'
+                      : query.data
+                        ? 'Data ready'
+                        : 'Waiting for data'}
+                </p>
+
+                <p className='text-xs text-[#736C82]'>
+                  {lastUpdated
+                    ? `Last updated at ${lastUpdated}`
+                    : 'Waiting for the first update'}
+                </p>
+              </div>
+
+              <label className='flex cursor-pointer items-center gap-2 border-l border-[#E4DCF8] pl-3'>
+                <input
+                  type='checkbox'
+                  checked={autoRefresh}
+                  onChange={(event) => setAutoRefresh(event.target.checked)}
+                  className='h-4 w-4 accent-[#6936F2]'
+                />
+
+                <span className='text-xs font-semibold text-[#51466E]'>
+                  Auto refresh
+                </span>
+              </label>
+            </div>
+
+            <button
+              type='button'
+              onClick={() => query.refetch()}
+              disabled={query.isFetching}
+              className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#5526D7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6936F2] disabled:opacity-60'
+            >
+              <RefreshCw
+                size={16}
+                className={query.isFetching ? 'motion-safe:animate-spin' : ''}
+              />
+
+              {query.isFetching ? 'Refreshing...' : 'Refresh insights'}
+            </button>
+          </div>
         </div>
 
-        <div
-          className='inline-flex rounded-xl bg-white p-1'
-          aria-label='Analytics scope'
+        {/* WELCOME */}
+
+        <header className='relative overflow-hidden rounded-[30px] bg-[#6936F2] p-6 text-white sm:p-9'>
+          <div className='pointer-events-none absolute -right-12 -top-16 h-52 w-52 rounded-full bg-white/10' />
+          <div className='pointer-events-none absolute bottom-[-90px] right-24 h-48 w-48 rounded-full bg-[#B99AFF]/30' />
+
+          <div className='relative max-w-3xl'>
+            <p className='text-xs font-bold uppercase tracking-[0.19em] text-[#E4D8FF]'>
+              Sociality Creator Playground
+            </p>
+
+            <h1 className='mt-4 text-3xl font-black leading-tight tracking-tight sm:text-5xl'>
+              Hey, content creator! 👋
+            </h1>
+
+            <p className='mt-3 text-xl font-semibold text-white sm:text-2xl'>
+              This page is designed just for you.
+            </p>
+
+            <p className='mt-4 max-w-2xl text-sm leading-7 text-[#F0E9FF] sm:text-base'>
+              Ever wondered what makes people connect with a post? Discover
+              fresh inspiration, explore what your audience responds to, and
+              find creative ideas to try next.
+            </p>
+
+            <p className='mt-3 text-sm font-semibold text-white'>
+              No complicated statistics needed. Just helpful insights and a
+              little creative magic. ✨
+            </p>
+
+            <div className='mt-6 flex flex-wrap gap-2'>
+              {[
+                '💡 Find ideas',
+                '💜 Understand your posts',
+                '🎯 Try something new',
+                '🔎 Explore the data',
+              ].map((item) => (
+                <span
+                  key={item}
+                  className='rounded-full bg-white/20 px-3 py-2 text-xs font-semibold'
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        {/* NAVIGATION */}
+
+        <nav
+          aria-label='Creator Playground sections'
+          className='grid grid-cols-3 gap-2 rounded-2xl bg-white p-2 shadow-sm'
         >
           {(
             [
-              ['personal', 'My Posts'],
-              ['community', 'Community'],
+              ['discover', 'Discover', Compass],
+              ['improve', 'Improve', Target],
+              ['advanced', 'Data Lab', Database],
             ] as const
-          ).map(([value, title]) => (
+          ).map(([value, title, Icon]) => (
             <button
               key={value}
               type='button'
-              onClick={() => {
-                setMode(value);
-                setSelectedId(null);
-                setSortBy('total');
-              }}
-              aria-pressed={mode === value}
-              className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-                mode === value
-                  ? 'bg-[#6936F2] text-white'
-                  : 'text-neutral-800 hover:bg-neutral-100'
+              onClick={() => changeTab(value)}
+              aria-pressed={tab === value}
+              className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition-colors sm:text-sm ${
+                tab === value
+                  ? 'bg-[#6936F2] text-white shadow-sm'
+                  : 'text-[#655B78] hover:bg-[#F3EEFF]'
               }`}
             >
+              <Icon size={17} />
               {title}
             </button>
           ))}
-        </div>
-      </header>
+        </nav>
 
-      {query.isPending && (
-        <div className='flex items-center justify-center gap-3 rounded-2xl border border-white/10 p-12 text-white'>
-          <LoaderCircle className='animate-spin' />
-          Loading insights...
-        </div>
-      )}
+        {/* DATA SOURCE */}
 
-      {query.isError && !query.data && (
-        <div className='rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900'>
-          <p className='font-semibold'>Insights could not be loaded.</p>
-          <p className='mt-2 text-sm'>
-            {query.error instanceof Error
-              ? query.error.message
-              : 'Please try again.'}
-          </p>
-          <button
-            type='button'
-            onClick={() => query.refetch()}
-            className='mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white'
-          >
-            Try again
-          </button>
-        </div>
-      )}
+        <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E9E5F4] bg-white p-4'>
+          <div>
+            <p className='text-sm font-bold'>Whose posts are we exploring?</p>
 
-      {query.data && (
-        <>
-          <section
-            aria-label='Data coverage'
-            className='rounded-2xl border border-violet-200 bg-violet-50 p-5 text-neutral-950'
-          >
-            <div className='flex flex-wrap items-center gap-3'>
-              <Database size={20} className='text-[#6936F2]' />
-              <p className='font-semibold'>{coverage}</p>
+            <p className='mt-1 text-xs text-[#736C82]'>
+              Switch between your own creations and the Sociality community.
+            </p>
+          </div>
 
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  partial
-                    ? 'bg-amber-100 text-amber-900'
-                    : 'bg-emerald-100 text-emerald-900'
+          <div className='inline-flex rounded-xl bg-[#F3EEFF] p-1'>
+            {(
+              [
+                ['personal', 'My Posts'],
+                ['community', 'Community'],
+              ] as const
+            ).map(([value, title]) => (
+              <button
+                key={value}
+                type='button'
+                onClick={() => {
+                  setMode(value);
+                  setSelectedId(null);
+                  setCompareA('');
+                  setCompareB('');
+                  setSearch('');
+                }}
+                aria-pressed={mode === value}
+                className={`rounded-lg px-4 py-2 text-xs font-bold sm:text-sm ${
+                  mode === value
+                    ? 'bg-[#6936F2] text-white'
+                    : 'text-[#51466E] hover:bg-white'
                 }`}
               >
-                {partial ? 'Partial sample' : 'All available pages loaded'}
-              </span>
-            </div>
+                {title}
+              </button>
+            ))}
+          </div>
+        </div>
 
-            <p className='mt-3 text-sm leading-6 text-neutral-700'>
-              {partial
-                ? 'More posts may be available. Rankings and statistics may change as more pages are loaded.'
-                : 'The API reports no further available page for this query. This does not verify coverage of the entire platform.'}
+        {/* LOADING */}
+
+        {query.isPending && (
+          <div className='flex items-center justify-center gap-3 rounded-2xl bg-white p-12 text-[#51466E]'>
+            <LoaderCircle className='motion-safe:animate-spin' />
+            Gathering your creator insights...
+          </div>
+        )}
+
+        {/* ERROR */}
+
+        {query.isError && (
+          <div
+            role='alert'
+            className='rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900'
+          >
+            <p className='font-bold'>We could not refresh your insights.</p>
+
+            <p className='mt-2 text-sm'>
+              {query.error instanceof Error
+                ? query.error.message
+                : 'Please try again.'}
             </p>
 
-            {analysis.missing > 0 && (
-              <p className='mt-2 text-sm font-medium text-amber-900'>
-                {analysis.missing} post(s) excluded because interaction counts
-                are missing.
+            {query.data && (
+              <p className='mt-2 text-sm'>
+                You can still explore the last successfully loaded results.
               </p>
             )}
 
-            {small && (
-              <p className='mt-2 text-sm font-medium text-amber-900'>
-                Small sample: fewer than 10 analyzable posts. Treat findings as
-                early observations.
-              </p>
-            )}
-          </section>
+            <button
+              type='button'
+              onClick={() => query.refetch()}
+              className='mt-4 rounded-xl bg-red-700 px-4 py-2 text-sm font-bold text-white'
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
-          <section className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
-            <MetricCard
-              title='Posts analyzed'
-              value={fmt(analysis.posts.length)}
-              detail='Unique posts with both counts available'
-            />
-            <MetricCard
-              title='Likes received'
-              value={fmt(analysis.likes)}
-              detail='Recorded likes on analyzed posts'
-            />
-            <MetricCard
-              title='Comments received'
-              value={fmt(analysis.comments)}
-              detail='Recorded comments on analyzed posts'
-            />
-            <MetricCard
-              title='Recorded interactions'
-              value={fmt(analysis.total)}
-              detail='Likes + comments; not an engagement rate'
-            />
-          </section>
+        {query.data && (
+          <>
+            {/* DATA COVERAGE */}
 
-          <Panel
-            title='What stands out?'
-            description='Simple observations based only on the posts loaded so far.'
-          >
-            <div className='grid gap-4 lg:grid-cols-2'>
-              <div className='rounded-xl bg-violet-50 p-5'>
-                <div className='flex items-center gap-2 font-semibold'>
-                  <Sparkles size={18} className='text-[#6936F2]' />
-                  Most interactions
-                </div>
-
-                <p className='mt-3 text-sm leading-6 text-neutral-800'>
-                  {topPost && topPost.total > 0
-                    ? `"${label(topPost)}" received ${fmt(
-                        topPost.total
-                      )} recorded interactions in this sample.`
-                    : 'No recorded interactions to rank yet.'}
-                </p>
-
-                {topPost && (
-                  <Link
-                    href={`/posts/${topPost.id}`}
-                    className='mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#6936F2]'
-                  >
-                    See this post <ArrowUpRight size={16} />
-                  </Link>
-                )}
-              </div>
-
-              <div className='rounded-xl bg-neutral-50 p-5'>
-                <p className='font-semibold'>Likes vs conversations</p>
-                <p className='mt-3 text-sm leading-6 text-neutral-800'>
-                  Of {fmt(analysis.total)} recorded interactions,{' '}
-                  {fmt(analysis.likes)} were likes and {fmt(analysis.comments)}{' '}
-                  were comments.
-                </p>
-                <p className='mt-2 text-xs leading-5 text-neutral-600'>
-                  These are counts of actions, not unique people or the
-                  percentage of viewers who interacted.
-                </p>
-              </div>
-            </div>
-
-            <div className='mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4'>
-              <p className='text-sm font-semibold text-amber-950'>
-                What can you do with this?
-              </p>
-              <p className='mt-2 text-sm leading-6 text-amber-900'>
-                Review the top post and consider testing a similar format in a
-                future post. This is an experiment idea, not evidence that the
-                format caused more interactions.
-              </p>
-              <p className='mt-2 text-xs text-amber-900'>
-                {small || partial
-                  ? 'Confidence is limited because the sample is small or incomplete.'
-                  : 'This remains descriptive: reach, audience size, and post age are not controlled.'}
-              </p>
-            </div>
-          </Panel>
-
-          <Panel
-            title={
-              mode === 'community'
-                ? 'Discover posts in the community'
-                : 'Which of your posts received the most interactions?'
-            }
-            description='Choose what to compare. Select a post to open its details.'
-          >
-            <div className='mb-5 flex flex-wrap gap-2'>
-              {(
-                [
-                  ['total', 'Most interactions'],
-                  ['likes', 'Most liked'],
-                  ['comments', 'Most discussed'],
-                ] as const
-              ).map(([value, title]) => (
-                <button
-                  key={value}
-                  type='button'
-                  onClick={() => setSortBy(value)}
-                  aria-pressed={sortBy === value}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-                    sortBy === value
-                      ? 'bg-[#6936F2] text-white'
-                      : 'border border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-100'
-                  }`}
-                >
-                  {title}
-                </button>
-              ))}
-            </div>
-
-            <RankedBars
-              posts={analysis.posts}
-              sortBy={sortBy}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          </Panel>
-
-          <Panel
-            title='Do likes and comments appear together?'
-            description='A bubble groups posts with identical like and comment counts.'
-          >
-            <BubbleChart
-              posts={analysis.posts}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          </Panel>
-
-          {selected && (
-            <section className='rounded-2xl border border-violet-200 bg-violet-50 p-5 text-neutral-950'>
-              <p className='text-xs font-bold uppercase tracking-wider text-[#6936F2]'>
-                Selected post
-              </p>
-              <h2 className='mt-2 font-semibold'>{label(selected)}</h2>
-              <p className='mt-2 text-sm text-neutral-700'>
-                By {selected.author} · {selected.likes} likes ·{' '}
-                {selected.comments} comments
-              </p>
-              <div className='mt-3 flex flex-wrap items-center gap-4'>
-                <Link
-                  href={`/posts/${selected.id}`}
-                  className='inline-flex items-center gap-1 text-sm font-semibold text-[#6936F2]'
-                >
-                  View post <ArrowUpRight size={16} />
-                </Link>
-                <button
-                  type='button'
-                  onClick={() => setSelectedId(null)}
-                  className='text-sm text-neutral-700 underline'
-                >
-                  Clear selection
-                </button>
-              </div>
-            </section>
-          )}
-
-          <Panel
-            title='Advanced Analytics'
-            description='Optional statistical details for users who want to explore the data more deeply.'
-          >
-            <details className='rounded-xl border border-neutral-200 p-4'>
-              <summary className='cursor-pointer font-semibold text-neutral-900'>
-                Show distribution and concentration analysis
-              </summary>
-
-              <div className='mt-5 space-y-5'>
-                {small && (
-                  <p className='rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900'>
-                    These statistics describe only {analysis.posts.length}{' '}
-                    posts. With such a small sample, do not use them to make
-                    broad conclusions about content performance.
-                  </p>
-                )}
-
-                {partial && (
-                  <p className='rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900'>
-                    Partial sample: the distribution may change when additional
-                    pages are loaded.
-                  </p>
-                )}
-
-                <div className='grid gap-4 sm:grid-cols-2'>
-                  <MetricCard
-                    title='Median interactions per post'
-                    value={
-                      analysis.median === null ? 'N/A' : fmt(analysis.median)
-                    }
-                    detail='Half the analyzed posts are at or below this value'
-                  />
-                  <MetricCard
-                    title='Top 10% share'
-                    value={
-                      analysis.topShare === null
-                        ? 'N/A'
-                        : `${(analysis.topShare * 100).toFixed(1)}%`
-                    }
-                    detail={`Share received by the top ${analysis.topCount} loaded posts; rounded up`}
-                  />
-                  <MetricCard
-                    title='Gini coefficient'
-                    value={
-                      analysis.gini === null ? 'N/A' : analysis.gini.toFixed(3)
-                    }
-                    detail='Higher means recorded interactions are more unevenly distributed'
-                  />
-                  <MetricCard
-                    title='HHI concentration'
-                    value={
-                      analysis.hhi === null ? 'N/A' : analysis.hhi.toFixed(4)
-                    }
-                    detail='Sum of squared shares of recorded interactions'
-                  />
-                </div>
+            <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E4DCF8] bg-[#F0EAFF] p-4'>
+              <div className='flex items-start gap-3'>
+                <ShieldCheck
+                  size={21}
+                  className='mt-0.5 shrink-0 text-[#6936F2]'
+                />
 
                 <div>
-                  <h3 className='font-semibold'>
-                    How evenly are interactions distributed?
-                  </h3>
-                  <p className='mt-1 text-sm text-neutral-600'>
-                    The diagonal represents equal distribution. A curve farther
-                    below it indicates more concentration among fewer posts.
+                  <p className='text-sm font-bold text-[#38245F]'>
+                    Your insights use {formatNumber(analysis.posts.length)}{' '}
+                    loaded {scope} with complete interaction counts.
                   </p>
-                  <LorenzCurve posts={analysis.posts} />
+
+                  <p className='mt-1 text-xs leading-5 text-[#655B78]'>
+                    {partial
+                      ? 'More posts may be available. Your findings may change as you load more.'
+                      : 'The API reports no further page for this query. This does not prove coverage of the entire platform.'}{' '}
+                    {smallSample
+                      ? 'This is a small sample, so treat patterns as early observations.'
+                      : ''}
+                  </p>
                 </div>
-
-                <p className='text-xs leading-6 text-neutral-600'>
-                  Gini and HHI describe concentration, not content quality or
-                  causes of engagement. No reach, impressions, or follower
-                  denominator is available.
-                </p>
               </div>
-            </details>
-          </Panel>
 
-          <Panel
-            title='How reliable is this analysis?'
-            description='See which records were included and how much data has been loaded.'
-          >
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-              <MetricCard
-                title='Records loaded'
-                value={fmt(analysis.rawCount)}
-                detail='Before duplicate removal'
-              />
-              <MetricCard
-                title='Unique posts'
-                value={fmt(analysis.uniqueCount)}
-                detail='Distinct post IDs'
-              />
-              <MetricCard
-                title='Duplicates'
-                value={fmt(analysis.duplicates)}
-                detail='Repeated IDs across loaded pages'
-              />
-              <MetricCard
-                title='Missing counts'
-                value={fmt(analysis.missing)}
-                detail='Excluded from interaction calculations'
-              />
+              <button
+                type='button'
+                onClick={() => changeTab('advanced')}
+                className='text-xs font-bold text-[#6936F2] underline underline-offset-4'
+              >
+                Check data quality
+              </button>
             </div>
 
-            <div className='mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-neutral-50 p-4'>
-              <p className='flex items-center gap-2 text-sm text-neutral-700'>
-                <Database size={17} />
-                {pagesLoaded} page(s) loaded
-              </p>
+            {/* SUMMARY METRICS */}
 
-              {query.hasNextPage && (
-                <button
-                  type='button'
-                  disabled={query.isFetchingNextPage}
-                  onClick={() => query.fetchNextPage()}
-                  className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60'
+            <section
+              aria-label='Your creator numbers'
+              className='grid grid-cols-2 gap-3 lg:grid-cols-4'
+            >
+              <Metric
+                emoji='📝'
+                label='Posts explored'
+                value={formatNumber(analysis.posts.length)}
+                description='Unique posts with complete counts'
+                background='bg-[#EEE8FF]'
+              />
+
+              <Metric
+                emoji='💜'
+                label='Likes recorded'
+                value={formatNumber(analysis.likes)}
+                description='Likes across analyzed posts'
+                background='bg-[#FFEAF3]'
+              />
+
+              <Metric
+                emoji='💬'
+                label='Comments recorded'
+                value={formatNumber(analysis.comments)}
+                description='Comments across analyzed posts'
+                background='bg-[#E5F7F6]'
+              />
+
+              <Metric
+                emoji='✨'
+                label='Total interactions'
+                value={formatNumber(analysis.total)}
+                description='Likes plus comments, not engagement rate'
+                background='bg-[#FFF2DF]'
+              />
+            </section>
+
+            {/* DISCOVER */}
+
+            {tab === 'discover' && (
+              <div className='space-y-6'>
+                <Panel
+                  title='Your Creator Opportunity Radar 🔭'
+                  description="Let's discover content themes worth exploring. These are clues from loaded captions, not predictions of what will go viral."
                 >
-                  {query.isFetchingNextPage ? (
-                    <LoaderCircle size={16} className='animate-spin' />
+                  {activeTopics.length === 0 ? (
+                    <div className='rounded-2xl bg-[#F8F6FF] p-6'>
+                      <p className='font-bold'>
+                        No clear themes detected yet 🌱
+                      </p>
+
+                      <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                        Your loaded captions do not match our simple theme
+                        keywords. Explore more community posts to discover new
+                        inspiration.
+                      </p>
+                    </div>
                   ) : (
-                    <ChevronDown size={16} />
-                  )}
-                  Load more posts
-                </button>
-              )}
-            </div>
+                    <div className='grid gap-4 md:grid-cols-2'>
+                      {activeTopics.map((topic) => (
+                        <div
+                          key={topic.id}
+                          className={`rounded-[22px] border p-5 ${topic.color}`}
+                        >
+                          <div className='flex items-start justify-between gap-3'>
+                            <span className='text-3xl' aria-hidden='true'>
+                              {topic.emoji}
+                            </span>
 
-            {query.isFetchNextPageError && (
-              <div className='mt-3 flex flex-wrap items-center gap-3'>
-                <p className='text-sm text-red-700'>
-                  The next page could not be loaded.
-                </p>
-                <button
-                  type='button'
-                  onClick={() => query.fetchNextPage()}
-                  className='rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white'
+                            <span className='rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-[#51466E]'>
+                              {topic.matches.length} matching posts
+                            </span>
+                          </div>
+
+                          <h3 className='mt-4 text-lg font-black'>
+                            {topic.title}
+                          </h3>
+
+                          <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                            {topic.medianInteractions === null
+                              ? 'No complete interaction counts available.'
+                              : `Median recorded interactions: ${formatNumber(topic.medianInteractions)} per matching post.`}
+                          </p>
+
+                          <p className='mt-2 text-xs leading-5 text-[#736C82]'>
+                            Themes are identified using caption keywords. Some
+                            posts may be classified incorrectly.
+                          </p>
+
+                          <button
+                            type='button'
+                            onClick={() =>
+                              setSelectedId(topic.matches[0]?.id ?? null)
+                            }
+                            className='mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#6936F2]'
+                          >
+                            Explore an example
+                            <ArrowRight size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Panel>
+
+                <Panel
+                  title='Explore what catches attention ✨'
+                  description='Discover posts with the most recorded likes or comments in the data you have loaded.'
                 >
-                  Retry page
-                </button>
+                  <div className='mb-5 flex flex-wrap gap-2'>
+                    {(
+                      [
+                        ['total', '✨ All interactions'],
+                        ['likes', '💜 Most liked'],
+                        ['comments', '💬 Most discussed'],
+                      ] as const
+                    ).map(([value, title]) => (
+                      <button
+                        key={value}
+                        type='button'
+                        onClick={() => setSortBy(value)}
+                        aria-pressed={sortBy === value}
+                        className={`rounded-full px-4 py-2 text-xs font-bold ${
+                          sortBy === value
+                            ? 'bg-[#6936F2] text-white'
+                            : 'bg-[#F3EEFF] text-[#51466E]'
+                        }`}
+                      >
+                        {title}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className='mb-4 flex items-center gap-3 rounded-xl border border-[#E4DCF8] bg-white px-4 py-3'>
+                    <Search size={18} className='text-[#736C82]' />
+
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder='Search captions or creators'
+                      aria-label='Search loaded posts'
+                      className='min-w-0 flex-1 bg-transparent text-sm text-[#25213B] outline-none placeholder:text-[#90889D]'
+                    />
+                  </label>
+
+                  <div className='grid gap-3 md:grid-cols-2'>
+                    {filtered.slice(0, 8).map((post) => (
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        selected={selectedId === post.id}
+                        onSelect={setSelectedId}
+                      />
+                    ))}
+                  </div>
+
+                  {filtered.length === 0 && (
+                    <p className='rounded-xl bg-[#F8F6FF] p-5 text-sm text-[#655B78]'>
+                      No matching posts in the loaded data.
+                    </p>
+                  )}
+
+                  <p className='mt-4 text-xs leading-5 text-[#736C82]'>
+                    These rankings use recorded interactions. They do not
+                    measure reach, impressions, or content quality.
+                  </p>
+                </Panel>
+
+                <Panel
+                  title='The interaction universe 🪐'
+                  description='Explore how likes and comments appear together. Bigger bubbles mean more posts share the same numbers.'
+                >
+                  <BubbleChart
+                    posts={analysis.posts}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                  />
+                </Panel>
               </div>
             )}
 
-            <div className='mt-5 space-y-2 text-xs leading-6 text-neutral-600'>
-              <p className='flex items-center gap-2'>
-                <ShieldCheck size={16} />
-                Source: mentor-provided Sociality API.
-              </p>
-              <p>Scope: {scopeText}, limited to successfully fetched pages.</p>
-              <p>
-                {reachedLimit
-                  ? `The ${MAX_PAGES}-page safety limit was reached. Additional posts may exist.`
-                  : partial
-                    ? 'More posts may be available to load.'
-                    : 'The API listing reports no further page for this query.'}
-              </p>
-              <p>
-                Missing interaction counts are excluded, never silently treated
-                as zero.
-              </p>
-              <p>
-                Likes and comments are recorded counts, not engagement rate,
-                reach, impressions, or unique users.
-              </p>
-              <p>
-                Rankings describe the currently loaded sample. They do not
-                establish why people interacted.
-              </p>
-            </div>
-          </Panel>
+            {/* IMPROVE */}
 
-          <footer className='flex items-center gap-2 text-xs text-neutral-300'>
-            <Heart size={14} />
-            <MessageCircle size={14} />
-            Sociality Intelligence · Built on the existing API
-          </footer>
-        </>
-      )}
+            {tab === 'improve' && (
+              <div className='space-y-6'>
+                <Panel
+                  title='Fair Comparison Studio ⚖️'
+                  description="Choose two posts. We'll compare what is recorded and explain what we cannot know."
+                >
+                  <div className='grid gap-4 md:grid-cols-2'>
+                    {(
+                      [
+                        ['Post A', compareA, setCompareA],
+                        ['Post B', compareB, setCompareB],
+                      ] as const
+                    ).map(([title, value, setter]) => (
+                      <label key={title} className='block'>
+                        <span className='mb-2 block text-sm font-bold'>
+                          {title}
+                        </span>
+
+                        <select
+                          value={value}
+                          onChange={(event) => setter(event.target.value)}
+                          className='w-full rounded-xl border border-[#DDD5F4] bg-white p-3 text-sm text-[#25213B] focus:outline-[#6936F2]'
+                        >
+                          <option value=''>Choose a post</option>
+
+                          {analysis.posts.map((post) => (
+                            <option key={post.id} value={String(post.id)}>
+                              {postLabel(post)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+
+                  {first && second && first.id !== second.id ? (
+                    <div className='mt-6 space-y-4'>
+                      <div className='grid gap-4 sm:grid-cols-2'>
+                        {[first, second].map((post, index) => (
+                          <div
+                            key={post.id}
+                            className={`rounded-2xl p-5 ${
+                              index === 0 ? 'bg-[#EEE8FF]' : 'bg-[#E5F7F6]'
+                            }`}
+                          >
+                            <p className='text-xs font-bold uppercase tracking-wider'>
+                              Post {index === 0 ? 'A' : 'B'}
+                            </p>
+
+                            <p className='mt-2 line-clamp-2 text-sm font-semibold'>
+                              {postLabel(post)}
+                            </p>
+
+                            <p className='mt-4 text-4xl font-black'>
+                              {post.total}
+                            </p>
+
+                            <p className='text-xs text-[#655B78]'>
+                              Recorded interactions
+                            </p>
+
+                            <p className='mt-3 text-xs'>
+                              {post.likes} likes and {post.comments} comments
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className='rounded-2xl border border-amber-200 bg-amber-50 p-5'>
+                        <p className='flex items-center gap-2 font-bold text-amber-950'>
+                          <ShieldCheck size={18} />
+                          Is this a fair comparison?
+                        </p>
+
+                        <p className='mt-3 text-sm leading-7 text-amber-900'>
+                          {first.total === second.total
+                            ? 'These posts have the same number of recorded interactions.'
+                            : `${
+                                first.total > second.total ? 'Post A' : 'Post B'
+                              } has ${Math.abs(first.total - second.total)} more recorded interactions.`}{' '}
+                          We cannot conclude that one performed better because
+                          exposure, audience size, and posting age are not
+                          available for adjustment.
+                        </p>
+
+                        <p className='mt-2 text-xs leading-5 text-amber-900'>
+                          Fairness status: insufficient information for a fully
+                          adjusted comparison.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='mt-5 rounded-2xl bg-[#F8F6FF] p-5 text-sm text-[#655B78]'>
+                      Choose two different posts to compare their recorded
+                      interactions.
+                    </div>
+                  )}
+                </Panel>
+
+                <Panel
+                  title='Your Next Move 💡'
+                  description='Turn observations into creative experiments. These are ideas to try, not guaranteed growth tricks.'
+                  action={
+                    <span className='rounded-full bg-[#FFF2DF] px-3 py-2 text-xs font-bold text-[#8C570C]'>
+                      {evidenceStatus}
+                    </span>
+                  }
+                >
+                  <div className='grid gap-4 lg:grid-cols-2'>
+                    <div className='rounded-[22px] bg-[#EEE8FF] p-5'>
+                      <span className='text-3xl' aria-hidden='true'>
+                        🧪
+                      </span>
+
+                      <h3 className='mt-3 text-lg font-black'>
+                        Try a conversation starter
+                      </h3>
+
+                      <p className='mt-2 text-sm leading-7 text-[#51466E]'>
+                        Create a post that ends with a genuine question. Later,
+                        compare its recorded comments with another post created
+                        for a similar audience.
+                      </p>
+
+                      <p className='mt-3 text-xs text-[#655B78]'>
+                        Why try this? It is a testable content idea. The current
+                        data cannot prove that questions cause more comments.
+                      </p>
+                    </div>
+
+                    <div className='rounded-[22px] bg-[#E5F7F6] p-5'>
+                      <span className='text-3xl' aria-hidden='true'>
+                        🎨
+                      </span>
+
+                      <h3 className='mt-3 text-lg font-black'>
+                        Revisit your standout post
+                      </h3>
+
+                      <p className='mt-2 text-sm leading-7 text-[#51466E]'>
+                        {analysis.ranked[0]
+                          ? `The highest interaction count in this sample is ${analysis.ranked[0].total}. Look at that post's opening line and consider testing a new variation.`
+                          : 'Once you have analyzable posts, revisit one and try a different opening line.'}
+                      </p>
+
+                      <p className='mt-3 text-xs text-[#655B78]'>
+                        This is an observation about loaded posts, not proof
+                        that a particular format works best.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type='button'
+                    onClick={() => setShowWhy((value) => !value)}
+                    aria-expanded={showWhy}
+                    className='mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#6936F2]'
+                  >
+                    <Lightbulb size={17} />
+                    Why am I seeing these ideas?
+                    <ChevronDown size={16} />
+                  </button>
+
+                  {showWhy && (
+                    <div className='mt-4 rounded-2xl border border-[#E4DCF8] bg-[#FBFAFF] p-5 text-sm leading-7 text-[#51466E]'>
+                      These ideas use {analysis.posts.length} posts with
+                      complete counts from the loaded {scope}. We observe
+                      captions, likes, and comments. We do not observe reach,
+                      impressions, audience demographics, or causal effects.
+                      {partial ? ' More pages may still be available.' : ''}
+                      {smallSample
+                        ? ' The sample is small, so findings may be unstable.'
+                        : ''}{' '}
+                      We do not assign a statistical confidence percentage
+                      without a justified estimation method.
+                    </div>
+                  )}
+                </Panel>
+
+                <Panel
+                  title='Creator Challenge Corner 🎯'
+                  description='Pick one creative experiment. The goal is to learn something useful, not chase a random number.'
+                >
+                  <div className='grid gap-3 md:grid-cols-3'>
+                    {CHALLENGES.map((challenge) => (
+                      <button
+                        key={challenge.id}
+                        type='button'
+                        onClick={() => setActiveChallenge(challenge.id)}
+                        aria-pressed={activeChallenge === challenge.id}
+                        className={`rounded-2xl border p-5 text-left transition-colors ${
+                          activeChallenge === challenge.id
+                            ? 'border-[#6936F2] bg-[#EEE8FF]'
+                            : 'border-[#E9E5F4] bg-white hover:bg-[#FBFAFF]'
+                        }`}
+                      >
+                        <span className='text-3xl' aria-hidden='true'>
+                          {challenge.emoji}
+                        </span>
+
+                        <p className='mt-3 font-bold'>{challenge.title}</p>
+
+                        <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                          {challenge.text}
+                        </p>
+
+                        <p className='mt-4 flex items-center gap-2 text-xs font-bold text-[#6936F2]'>
+                          {activeChallenge === challenge.id ? (
+                            <>
+                              <CheckCircle2 size={15} />
+                              Challenge selected
+                            </>
+                          ) : (
+                            <>
+                              <Target size={15} />
+                              Choose this challenge
+                            </>
+                          )}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className='mt-4 text-xs leading-6 text-[#736C82]'>
+                    Your selection is kept in this page session. Persistent
+                    challenge tracking will be added in a future step.
+                  </p>
+                </Panel>
+              </div>
+            )}
+
+            {/* ADVANCED */}
+
+            {tab === 'advanced' && (
+              <div className='space-y-6'>
+                <Panel
+                  title='Data Quality Center 🛡️'
+                  description="Great insights begin with reliable data. Here's what we can check about the posts currently loaded."
+                >
+                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                    <Metric
+                      emoji='📦'
+                      label='Records loaded'
+                      value={formatNumber(analysis.rawCount)}
+                      description='Records returned across loaded pages'
+                      background='bg-[#EEE8FF]'
+                    />
+
+                    <Metric
+                      emoji='📝'
+                      label='Unique posts'
+                      value={formatNumber(analysis.uniqueCount)}
+                      description='Unique post IDs after deduplication'
+                      background='bg-[#E5F7F6]'
+                    />
+
+                    <Metric
+                      emoji='🔍'
+                      label='Repeated records'
+                      value={formatNumber(analysis.duplicates)}
+                      description='Repeated IDs across loaded pages'
+                      background='bg-[#FFF2DF]'
+                    />
+
+                    <Metric
+                      emoji='🧩'
+                      label='Incomplete counts'
+                      value={formatNumber(analysis.missing)}
+                      description='Posts missing valid likes or comments'
+                      background='bg-[#FFEAF3]'
+                    />
+                  </div>
+
+                  <div className='mt-5 rounded-2xl bg-[#F8F6FF] p-5'>
+                    <h3 className='font-bold'>What does this mean?</h3>
+
+                    <p className='mt-2 text-sm leading-7 text-[#655B78]'>
+                      We remove repeated post IDs from the analysis. Posts with
+                      missing interaction counts are excluded from calculations
+                      that need both likes and comments.
+                    </p>
+
+                    <p className='mt-3 text-sm leading-7 text-[#655B78]'>
+                      A missing value is not treated as zero. This helps avoid
+                      misleading results.
+                    </p>
+                  </div>
+                </Panel>
+
+                <Panel
+                  title='Analysis coverage 📚'
+                  description='Understand how much data has been explored and whether more pages may be available.'
+                >
+                  <div className='grid gap-4 sm:grid-cols-3'>
+                    <Metric
+                      emoji='📄'
+                      label='Pages loaded'
+                      value={formatNumber(pagesLoaded)}
+                      description={`Up to ${MAX_PAGES} pages per query`}
+                      background='bg-[#EEE8FF]'
+                    />
+
+                    <Metric
+                      emoji='📊'
+                      label='Analyzed posts'
+                      value={formatNumber(analysis.posts.length)}
+                      description='Posts with complete interaction counts'
+                      background='bg-[#E5F7F6]'
+                    />
+
+                    <Metric
+                      emoji='🔭'
+                      label='Coverage'
+                      value={partial ? 'Partial' : 'No next page'}
+                      description='Based on API pagination metadata'
+                      background='bg-[#FFF2DF]'
+                    />
+                  </div>
+
+                  <p className='mt-5 text-sm leading-7 text-[#655B78]'>
+                    The analysis uses records returned by the Sociality API. It
+                    does not claim to represent every post ever created on the
+                    platform.
+                  </p>
+
+                  {reachedLimit && (
+                    <p className='mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900'>
+                      The analysis reached its configured page limit. Additional
+                      posts may exist beyond this sample.
+                    </p>
+                  )}
+                </Panel>
+
+                <Panel
+                  title='Interaction concentration 📈'
+                  description='Explore whether recorded interactions are spread across posts or concentrated in a smaller number of posts.'
+                >
+                  <div className='grid gap-5 lg:grid-cols-2'>
+                    <div className='rounded-2xl bg-[#F8F6FF] p-5'>
+                      <h3 className='font-bold'>Lorenz Curve</h3>
+
+                      <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                        This curve shows how recorded interactions are
+                        distributed among the posts we loaded.
+                      </p>
+
+                      <LorenzCurve posts={analysis.posts} />
+                    </div>
+
+                    <div className='space-y-3'>
+                      <Metric
+                        emoji='📊'
+                        label='Median interactions'
+                        value={
+                          analysis.median === null
+                            ? 'N/A'
+                            : formatNumber(analysis.median)
+                        }
+                        description='The middle interaction count across analyzed posts'
+                        background='bg-[#EEE8FF]'
+                      />
+
+                      <Metric
+                        emoji='📐'
+                        label='Gini coefficient'
+                        value={
+                          analysis.gini === null
+                            ? 'N/A'
+                            : analysis.gini.toFixed(3)
+                        }
+                        description='Describes inequality in recorded interactions'
+                        background='bg-[#E5F7F6]'
+                      />
+
+                      <Metric
+                        emoji='🔬'
+                        label='HHI'
+                        value={
+                          analysis.hhi === null
+                            ? 'N/A'
+                            : analysis.hhi.toFixed(3)
+                        }
+                        description='Sum of squared interaction shares'
+                        background='bg-[#FFF2DF]'
+                      />
+
+                      <Metric
+                        emoji='🌟'
+                        label='Top 10% share'
+                        value={
+                          analysis.topShare === null
+                            ? 'N/A'
+                            : `${formatNumber(analysis.topShare * 100)}%`
+                        }
+                        description={`Share of interactions among the ${analysis.topCount} highest ranked posts`}
+                        background='bg-[#FFEAF3]'
+                      />
+                    </div>
+                  </div>
+
+                  <p className='mt-5 text-xs leading-6 text-[#736C82]'>
+                    These are descriptive statistics calculated from loaded
+                    posts. They do not measure content quality or explain why a
+                    post received attention.
+                  </p>
+                </Panel>
+
+                <Panel
+                  title='How your insights work 🔍'
+                  description="A little transparency goes a long way. Here's how we turn Sociality posts into useful observations."
+                >
+                  <div className='grid gap-3 md:grid-cols-2'>
+                    {[
+                      {
+                        title: '1. Gather posts',
+                        text: 'We request paginated post data from the Sociality API.',
+                      },
+                      {
+                        title: '2. Check the data',
+                        text: 'We validate counts and remove repeated post IDs.',
+                      },
+                      {
+                        title: '3. Explore patterns',
+                        text: 'We analyze recorded interactions and classify captions using simple keywords.',
+                      },
+                      {
+                        title: '4. Explain limitations',
+                        text: 'We identify missing information and avoid unsupported predictions.',
+                      },
+                    ].map((step) => (
+                      <div
+                        key={step.title}
+                        className='rounded-2xl border border-[#E9E5F4] bg-[#FBFAFF] p-5'
+                      >
+                        <h3 className='font-bold'>{step.title}</h3>
+
+                        <p className='mt-2 text-sm leading-7 text-[#655B78]'>
+                          {step.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </div>
+            )}
+
+            {/* SELECTED POST */}
+
+            {selected && (
+              <section className='rounded-[26px] border border-[#DCD1FA] bg-white p-5 shadow-sm sm:p-7'>
+                <div className='flex items-start justify-between gap-3'>
+                  <div>
+                    <p className='text-xs font-bold uppercase tracking-wider text-[#6936F2]'>
+                      Post Explorer
+                    </p>
+
+                    <h2 className='mt-2 text-xl font-black'>
+                      Let's take a closer look 🔎
+                    </h2>
+                  </div>
+
+                  <button
+                    type='button'
+                    onClick={() => setSelectedId(null)}
+                    className='rounded-full bg-[#F3EEFF] px-3 py-2 text-xs font-bold text-[#6936F2]'
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <p className='mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-[#51466E]'>
+                  {selected.caption || `Post #${selected.id}`}
+                </p>
+
+                <p className='mt-3 text-xs text-[#736C82]'>
+                  By {selected.author}
+                </p>
+
+                <div className='mt-5 grid grid-cols-3 gap-3'>
+                  <Metric
+                    emoji='💜'
+                    label='Likes'
+                    value={formatNumber(selected.likes)}
+                    description='Recorded likes'
+                    background='bg-[#FFEAF3]'
+                  />
+
+                  <Metric
+                    emoji='💬'
+                    label='Comments'
+                    value={formatNumber(selected.comments)}
+                    description='Recorded comments'
+                    background='bg-[#E5F7F6]'
+                  />
+
+                  <Metric
+                    emoji='✨'
+                    label='Interactions'
+                    value={formatNumber(selected.total)}
+                    description='Likes plus comments'
+                    background='bg-[#EEE8FF]'
+                  />
+                </div>
+              </section>
+            )}
+
+            {/* PAGINATION */}
+
+            <section className='rounded-[26px] border border-[#E9E5F4] bg-white p-5 sm:p-7'>
+              <div className='flex flex-wrap items-center justify-between gap-4'>
+                <div>
+                  <h2 className='text-lg font-bold'>Keep exploring 🌍</h2>
+
+                  <p className='mt-2 text-sm leading-6 text-[#655B78]'>
+                    {formatNumber(analysis.uniqueCount)} unique posts loaded
+                    across {pagesLoaded} pages.
+                    {partial
+                      ? ' More posts may be available.'
+                      : ' No additional page is currently reported.'}
+                  </p>
+                </div>
+
+                {query.hasNextPage && !reachedLimit && (
+                  <button
+                    type='button'
+                    onClick={() => query.fetchNextPage()}
+                    disabled={query.isFetching}
+                    className='inline-flex items-center gap-2 rounded-xl bg-[#6936F2] px-5 py-3 text-sm font-bold text-white hover:bg-[#5526D7] disabled:opacity-60'
+                  >
+                    {query.isFetchingNextPage
+                      ? 'Loading more...'
+                      : 'Load more posts'}
+
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* FOOTER */}
+
+            <footer className='flex flex-wrap items-center justify-center gap-2 pb-5 text-center text-xs leading-6 text-[#736C82]'>
+              <Heart size={14} />
+              <MessageCircle size={14} />
+              <BarChart3 size={14} />
+              <TrendingUp size={14} />
+              Sociality Creator Playground. Make content smarter, without making
+              analytics harder.
+            </footer>
+          </>
+        )}
+      </div>
     </main>
   );
 }
